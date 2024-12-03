@@ -84,9 +84,9 @@ For more information on data preprocessing and feature selection, refer to the [
 
 Contributions are welcome! Please submit a pull request or open an issue for any improvements or bug fixes.  
 
-<> ## License  
+<!---  ## License 
 
-<> This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.  
+<> This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.  --->  
 
 ## Acknowledgments  
 
