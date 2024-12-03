@@ -11,8 +11,6 @@ This project investigates the use of machine learning to automate mutation type 
 ### Key Features  
 
 
-
-
 ## Setup  
 
 ### Installation  
@@ -25,7 +23,7 @@ pip install -r requirements.txt
 
 ### Configuration  
 
-Ensure your environment is set up correctly before running the models:  
+Ensure your environment is set up correctly before running the models:  #TODO: Implement it
 
 ```bash  
 python setup.py  
@@ -35,7 +33,7 @@ This script initializes your environment, prompts for dataset configuration, and
 
 ## Quick Start  
 
-### Running the Model  
+### Running the Model  #TODO:
 
 To train and evaluate the models, follow these steps:  
 
@@ -53,7 +51,7 @@ results = evaluate_model(model, test_data=data['test'])
 print(results)  
 ```  
 
-### Searching for Optimal Parameters  
+### Searching for Optimal Parameters  #TODO:
 
 To search for the best hyperparameters using grid search:  
 
@@ -64,7 +62,7 @@ best_params = hyperparameter_search('random_forest', data['train'])
 print("Optimal Parameters:", best_params)  
 ```  
 
-### Inspecting Model Performance  
+### Inspecting Model Performance  #TODO:
 
 Visualize model performance:  
 
@@ -74,7 +72,7 @@ from ml_pipeline import plot_results
 plot_results(results)  
 ```  
 
-## Dataset  
+## Dataset  (indicate that is not publicly available?)
 
 The dataset used in this study consists of 1046 PMD patients. It is divided into training and test sets, with features derived from clinical phenotype data.  
 
@@ -84,9 +82,9 @@ For more information on data preprocessing and feature selection, refer to the [
 
 Contributions are welcome! Please submit a pull request or open an issue for any improvements or bug fixes.  
 
-<!---  ## License 
+ ## License 
 
-<> This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.  --->  
+<> This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.  #TODO:insert the Apache
 
 ## Acknowledgments  
 

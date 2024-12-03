@@ -1,0 +1,8 @@
+# .gitignore
+catboost_info/
+.env
+*~
+dataset
+__pycache__
+*.out
+saved_results
