@@ -6,6 +6,8 @@ data
 __pycache__
 *.out
 saved_results
+config_api.py
+src/survey/patient_description.py
 
 # Artifacts and build output
 /dist/
