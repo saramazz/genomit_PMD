@@ -23,7 +23,7 @@ pip install -r requirements.txt
 
 ### Configuration  
 
-Ensure your environment is set up correctly before running the models:  #TODO: Implement it
+Ensure your environment is set up correctly before running the models:
 
 ```bash  
 python setup.py  
@@ -82,9 +82,11 @@ For more information on data preprocessing and feature selection, refer to the [
 
 Contributions are welcome! Please submit a pull request or open an issue for any improvements or bug fixes.  
 
- ## License 
 
-<> This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.  #TODO:insert the Apache
+## License
+
+This project is licensed under the Apache License 2.0. See the [LICENSE](./LICENSE) file for details.
+
 
 ## Acknowledgments  
 
