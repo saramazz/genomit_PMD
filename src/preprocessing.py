@@ -9,7 +9,7 @@ from collections import Counter
 from itertools import cycle
 from scipy.stats import zscore
 from sklearn.preprocessing import LabelEncoder
-from config import global_path, saved_result_path
+from config import global_path
 from sklearn import metrics
 
 """

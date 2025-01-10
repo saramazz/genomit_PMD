@@ -2,10 +2,6 @@
 import os
 import pickle
 
-### Local Imports:
-from config import global_path, saved_result_path
-
-
 def save_variable(variable, name, save_path):
     final_name = os.path.join(save_path, name + ".pickle")
     with open(final_name, "wb") as f:

@@ -2,7 +2,69 @@
 catboost_info/
 .env
 *~
-dataset
+data
 __pycache__
 *.out
 saved_results
+
+# Artifacts and build output
+/dist/
+*.egg-info/
+*.egg
+__pycache__/
+*.pyc
+
+# Python environment files
+.env
+.venv/
+env/
+venv/
+
+# IDEs and editors
+.vscode/
+.idea/
+*.sublime-workspace
+*.sublime-project
+
+# System files
+.DS_Store
+Thumbs.db
+
+# Logs and databases
+*.log
+*.sqlite3
+
+# Coverage reports
+htmlcov/
+.coverage
+.tox/
+
+# Jupyter Notebook
+*.ipynb_checkpoints
+
+# Distribution packages
+*.tar.gz
+*.whl
+
+# C extensions
+*.so
+
+# Unit test / coverage reports
+.pytest_cache/
+nosetests.xml
+coverage.xml
+*.cover
+
+# MyPy
+.mypy_cache/
+
+# Profiling data
+.prof
+
+# Mac-specific files
+.DS_Store
+
+# Backup files
+*~
+*.bak
+*.swp

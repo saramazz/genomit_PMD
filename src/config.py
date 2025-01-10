@@ -10,21 +10,21 @@ global_path = os.path.dirname(script_directory)
 print("Global path:", global_path)
 
 # Define the path for saved results folder
-saved_result_path = os.path.join(global_path, "saved_results")  # Directory for saved results
-# print('Save result path:', saved_result_path)
+saved_result_path = os.path.join(
+    global_path, "saved_results"
+)  # Directory for saved results
+print("Save result path:", saved_result_path)
 
-saved_result_path_classification = os.path.join(saved_result_path, "classifiers_results")
-# Optional alternative path (uncomment and modify if needed)
-# saved_result_path_classification = (
-#     os.path.join(saved_result_path, "classifiers_results/experiments") or best_model_idx
-# )
+saved_result_path_classification = os.path.join(
+    saved_result_path, "classifiers_results"
+)
 
 saved_result_path_survey = os.path.join(saved_result_path, "survey")
 
 # Print the classification results path for debugging purposes
-print("Save result path classification:", saved_result_path_classification)
+# print("Save result path classification:", saved_result_path_classification)
 
-'''
+"""
 # Import cProfile for performance profiling
 import cProfile
 
@@ -33,4 +33,4 @@ script_path = os.path.join(global_path, "src", "main_classification_DNA.py")
 
 # Uncomment the following line to profile the script execution
 cProfile.run("exec(open(script_path).read())")
-'''
+"""

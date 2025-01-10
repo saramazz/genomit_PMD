@@ -16,8 +16,20 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
-from sklearn.model_selection import train_test_split, GridSearchCV, LeaveOneGroupOut, KFold
-from sklearn.metrics import classification_report, confusion_matrix, precision_recall_curve, mean_squared_error, f1_score, make_scorer
+from sklearn.model_selection import (
+    train_test_split,
+    GridSearchCV,
+    LeaveOneGroupOut,
+    KFold,
+)
+from sklearn.metrics import (
+    classification_report,
+    confusion_matrix,
+    precision_recall_curve,
+    mean_squared_error,
+    f1_score,
+    make_scorer,
+)
 from sklearn.feature_selection import SelectPercentile, SelectKBest, mutual_info_classif
 from sklearn.preprocessing import StandardScaler
 from sklearn.ensemble import RandomForestClassifier
@@ -206,7 +218,7 @@ balancing_techniques = [
     "no",
     "over",
     "under",
-]  
+]
 feature_selection_options = ["no", "pca", "mrmr", "select_from_model", "rfe"]
 
 
