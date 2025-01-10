@@ -1,12 +1,12 @@
 # ML-Based Mutation Classification in Primary Mitochondrial Diseases
 
-This repository provides a Python-based framework for applying machine learning (ML) techniques to classify mutation types (mitochondrial DNA vs. nuclear DNA) in patients with Primary Mitochondrial Diseases (PMDs). By leveraging basic phenotype data, our approach seeks to improve diagnostic accuracy without relying on invasive histological or genetic testing.
+This repository provides a Python-based framework for applying machine learning (ML) and deep learning (DL) techniques to classify mutation types (mitochondrial DNA vs. nuclear DNA) in patients with Primary Mitochondrial Diseases (PMDs). By leveraging basic phenotype data, our approach seeks to improve diagnostic accuracy without relying on invasive histological or genetic testing.
 
 ## Overview  
 
 Primary Mitochondrial Diseases (PMDs) are a diverse group of rare inherited metabolic disorders caused by mutations in either mitochondrial DNA (mtDNA) or nuclear DNA (nDNA). Currently, diagnosing PMDs involves complex interpretation of clinical, biochemical, and histological data, which limits accessibility to accurate diagnoses.
 
-This project investigates the use of machine learning to automate mutation type classification based solely on phenotypic data. The framework evaluates four ML classifiers—XGBoost, Random Forest, Decision Tree, and Support Vector Machine—on a multicenter dataset comprising 1046 patients from nine Italian centers.
+This project investigates the use of machine learning to automate mutation type classification based solely on phenotypic data. The framework evaluates ML and DL classifierson a multicenter dataset comprising 1046 patients from nine Italian centers.
 
 ### Key Features  
 
@@ -26,7 +26,7 @@ pip install -r requirements.txt
 Ensure your environment is set up correctly before running the models:
 
 ```bash  
-python setup.py  
+python setup.py  install
 ```  
 
 This script initializes your environment, prompts for dataset configuration, and ensures all dependencies are correctly installed.  
@@ -72,9 +72,9 @@ from ml_pipeline import plot_results
 plot_results(results)  
 ```  
 
-## Dataset  (indicate that is not publicly available?)
+## Dataset 
 
-The dataset used in this study consists of 1046 PMD patients. It is divided into training and test sets, with features derived from clinical phenotype data.  
+The dataset utilized in this study comprises 1046 patients with Primary Mitochondrial Diseases (PMD) collected from nine Italian centers. It is not publicly available. The dataset is divided into training and test sets, with features extracted from clinical phenotype data.
 
 For more information on data preprocessing and feature selection, refer to the [documentation](#).  
 
@@ -90,7 +90,7 @@ This project is licensed under the Apache License 2.0. See the [LICENSE](./LICEN
 
 ## Acknowledgments  
 
-We thank the nine Italian centers for providing the dataset and the expert physicians in mitochondrial medicine for their valuable insights.  
+I thank the nine Italian centers for providing the dataset and the expert physicians in mitochondrial medicine for their valuable insights.  
 
 ## Contact  
 
