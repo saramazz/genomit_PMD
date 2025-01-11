@@ -88,7 +88,7 @@ FEATURE SELECTION
 """
 
 # Load the important variables from Excel
-important_vars_path = os.path.join(global_path, "dataset", "important_variables.xlsx")
+important_vars_path = os.path.join(global_path, "data", "important_variables.xlsx")
 df_vars = pd.read_excel(important_vars_path)
 
 # Specify the column name for considering variables

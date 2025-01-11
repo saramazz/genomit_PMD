@@ -30,10 +30,22 @@ saved_result_path = os.path.join(
 print("Save result path:", saved_result_path)
 
 saved_result_path_classification = os.path.join(
-    saved_result_path, "classifiers_results"
+    saved_result_path, "classifiers_results/patient_analysis"
 )
 
 saved_result_path_survey = os.path.join(saved_result_path, "survey")
+
+#if not existing, create the directories for the saved results
+if not os.path.exists(saved_result_path) :
+    os.makedirs(saved_result_path)
+if not os.path.exists(saved_result_path_classification) :
+    #also for classification and survey
+    os.makedirs(saved_result_path_classification)
+if not os.path.exists(saved_result_path_survey) :
+    os.makedirs(saved_result_path_survey)
+
+
+
 
 """
 # Import cProfile for performance profiling

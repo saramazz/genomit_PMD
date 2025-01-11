@@ -107,7 +107,7 @@ results_df.to_csv(output_path, index=False)
 
 print(f"Results saved to {output_path}")
 print(results_df)
-print("Dataset dimension: ", df.shape)
+print("data dimension: ", df.shape)
 
 
 """
@@ -168,8 +168,8 @@ def create_descriptions(index, row, id, max_tokens=300, temperature=0.5):
     return {"patient_id": f"Patient_{id}", "description": description_llm}
 
 
-# Apply the function to the dataset
-def process_dataset_and_save(df, output_path):
+# Apply the function to the data
+def process_data_and_save(df, output_path):
     results = []
 
     for index, row in df.iterrows():
@@ -203,8 +203,8 @@ if proceed == "n":
     print("Exiting the script...")
     sys.exit(0)
 
-# Process the dataset and save descriptions
-result = process_dataset_and_save(df, output_path)
+# Process the data and save descriptions
+result = process_data_and_save(df, output_path)
 
 # save in a log file the details of the number of patients, model used, max tokens and the time of the run
 log_file_path = os.path.join(

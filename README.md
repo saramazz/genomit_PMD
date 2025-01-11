@@ -6,7 +6,7 @@ This repository provides a Python-based framework for applying machine learning 
 
 Primary Mitochondrial Diseases (PMDs) are a diverse group of rare inherited metabolic disorders caused by mutations in either mitochondrial DNA (mtDNA) or nuclear DNA (nDNA). Currently, diagnosing PMDs involves complex interpretation of clinical, biochemical, and histological data, which limits accessibility to accurate diagnoses.
 
-This project investigates the use of machine learning to automate mutation type classification based solely on phenotypic data. The framework evaluates ML and DL classifierson a multicenter dataset comprising 1046 patients from nine Italian centers.
+This project investigates the use of machine learning to automate mutation type classification based solely on phenotypic data. The framework evaluates ML and DL classifierson a multicenter data comprising 1046 patients from nine Italian centers.
 
 ### Key Features  
 
@@ -29,7 +29,7 @@ Ensure your environment is set up correctly before running the models:
 python setup.py  install
 ```  
 
-This script initializes your environment, prompts for dataset configuration, and ensures all dependencies are correctly installed.  
+This script initializes your environment, prompts for data configuration, and ensures all dependencies are correctly installed.  
 
 ## Quick Start  
 
@@ -40,8 +40,8 @@ To train and evaluate the models, follow these steps:
 ```python  
 from ml_pipeline import load_data, train_model, evaluate_model  
 
-# 1. Load the dataset  
-data = load_data('data/PMD_dataset.csv')  
+# 1. Load the data  
+data = load_data('data/PMD_data.csv')  
 
 # 2. Train the Random Forest model  
 model = train_model(data, model_type='random_forest', balance=True)  
@@ -72,9 +72,9 @@ from ml_pipeline import plot_results
 plot_results(results)  
 ```  
 
-## Dataset 
+## data 
 
-The dataset utilized in this study comprises 1046 patients with Primary Mitochondrial Diseases (PMD) collected from nine Italian centers. It is not publicly available. The dataset is divided into training and test sets, with features extracted from clinical phenotype data.
+The data utilized in this study comprises 1046 patients with Primary Mitochondrial Diseases (PMD) collected from nine Italian centers. It is not publicly available. The data is divided into training and test sets, with features extracted from clinical phenotype data.
 
 For more information on data preprocessing and feature selection, refer to the [documentation](#).  
 
@@ -90,7 +90,7 @@ This project is licensed under the Apache License 2.0. See the [LICENSE](./LICEN
 
 ## Acknowledgments  
 
-I thank the nine Italian centers for providing the dataset and the expert physicians in mitochondrial medicine for their valuable insights.  
+I thank the nine Italian centers for providing the data and the expert physicians in mitochondrial medicine for their valuable insights.  
 
 ## Contact  
 

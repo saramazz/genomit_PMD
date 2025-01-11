@@ -50,19 +50,19 @@ def check_environment():
         sys.exit(1)
 
 
-def configure_dataset():
-    """Prompt the user to configure the dataset."""
+def configure_data():
+    """Prompt the user to configure the data."""
     try:
-        print("Configuring dataset...")
-        dataset_path = input(
-            "Please provide the path to the PMD dataset (default: 'saved_results/df/df_Global.xlsx'): "
+        print("Configuring data...")
+        data_path = input(
+            "Please provide the path to the PMD data (default: 'saved_results/df/df_Global.xlsx'): "
         )
-        if dataset_path and os.path.exists(dataset_path):
-            print(f"Using dataset from: {dataset_path}")
+        if data_path and os.path.exists(data_path):
+            print(f"Using data from: {data_path}")
         else:
-            print("Using default dataset from: 'saved_results/df/df_Global.xlsx'")
+            print("Using default data from: 'saved_results/df/df_Global.xlsx'")
     except Exception as e:
-        print(f"An error occurred during dataset configuration: {e}")
+        print(f"An error occurred during data configuration: {e}")
         sys.exit(1)
 
 
@@ -71,7 +71,7 @@ def main():
     try:
         check_environment()
         install_requirements()
-        configure_dataset()
+        configure_data()
         print("Setup completed successfully.")
     except Exception as e:
         print(f"An error occurred in the setup process: {e}")

@@ -48,7 +48,6 @@ from sklearn.feature_selection import (
 )
 from sklearn.preprocessing import (
     StandardScaler,
-
 )
 from sklearn.impute import SimpleImputer
 from sklearn.pipeline import Pipeline
@@ -57,6 +56,7 @@ from sklearn.svm import SVC
 
 # Gradient boosting and boosting classifier imports
 from xgboost import XGBClassifier
+
 # MRMR for feature selection
 import mrmr
 
@@ -68,8 +68,8 @@ from config import (
     saved_result_path_classification,
 )
 from utilities import *
-from processing import *
 from plotting import *
+from preprocessing import *
 
 
 def classification_results_80_20(X, y, classifier_name, clf, param_grid):
@@ -597,17 +597,35 @@ def process_gendna_column(df):
 
     # Save patients with NaN 'gendna' information to a file
     file_path = os.path.join(
-        saved_result_path_classification, "patients_with_nan_gendna.txt"
+        saved_result_path_classification, "patients_with_nan_or_1_gendna.csv"
     )
     patients_with_nan_gendna = df[df["gendna"].isnull()][["subjid", "Hospital"]]
+    #add to the patients_with_nan_gendna the patients where gendna is equal to 1
+    patients_with_1_gendna = df[df["gendna"] == 1][["subjid", "Hospital"]]
+    patients_with_nan_gendna = pd.concat([patients_with_nan_gendna, patients_with_1_gendna])
+    #create a df with the all the columns of these patients
+    patients_with_nan_gendna = df[df["subjid"].isin(patients_with_nan_gendna["subjid"])]
     patients_with_nan_gendna.to_csv(file_path, index=False)
-    print("Patients with NaN 'gendna' information saved to:", file_path)
+    #convert to numerical and save it patients_with_nan_gendna
+    patients_with_nan_gendna = convert_to_numerical(patients_with_nan_gendna)
+    patients_with_nan_gendna.to_csv(os.path.join(
+        saved_result_path_classification, "patients_with_nan_or_1_gendna_num.csv"
+    ), index=False)
+    #print the dimension of the file
+    print("Patients with NaN or 1 'gendna' information saved to:", file_path)
+    print("Dimension of the file:", patients_with_nan_gendna.shape) 
+
 
     # Drop NaN values from 'gendna' column
     df_non_nan = df.dropna(subset=["gendna"])
 
     # Remove rows where 'gendna' is equal to 1
     df_non_nan = df_non_nan[df_non_nan["gendna"] != 1]
+
+    #print the number of rows removed and the new number of rows
+    print(f"Number of rows removed: {len(df) - len(df_non_nan)}")
+    print(f"New number of rows: {len(df_non_nan)}")
+
 
     # Create 'nDNA' and 'mtDNA' classes
     df_non_nan["nDNA"] = df_non_nan["gendna"].apply(
@@ -662,9 +680,7 @@ def define_X_y(df, columns_to_drop):
     # y = df.pop("gendna_type")
 
     # Load the important variables from Excel
-    important_vars_path = os.path.join(
-        global_path, "dataset", "important_variables.xlsx"
-    )
+    important_vars_path = os.path.join(global_path, "data", "important_variables.xlsx")
     df_vars = pd.read_excel(important_vars_path)
 
     # Specify the column name for considering variables
@@ -692,9 +708,7 @@ def define_X_y(df, columns_to_drop):
 
 def fill_missing_values(df):
     # Load the important variables file
-    important_vars_path = os.path.join(
-        global_path, "dataset", "important_variables.xlsx"
-    )
+    important_vars_path = os.path.join(global_path, "data", "important_variables.xlsx")
     df_vars = pd.read_excel(important_vars_path)
 
     # Print columns not in the important variables list

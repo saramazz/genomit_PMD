@@ -28,18 +28,16 @@ from preprocessing import *
 from plotting import *
 
 """
-This script handles the creation, merging, and preprocessing of datasets from multiple hospitals.
+This script handles the creation, merging, and preprocessing of datas from multiple hospitals.
 Data is numerically encoded and saved in Excel for further analysis.
 """
 
-print("Defining dataset path...")
-dataset_path = os.path.join(global_path, "dataset")
+print("Defining data path...")
+data_path = os.path.join(global_path, "data")
 
-print("Retrieving list of folders in dataset path...")
-all_items = os.listdir(dataset_path)
-folders = [
-    item for item in all_items if os.path.isdir(os.path.join(dataset_path, item))
-]
+print("Retrieving list of folders in data path...")
+all_items = os.listdir(data_path)
+folders = [item for item in all_items if os.path.isdir(os.path.join(data_path, item))]
 folders_to_remove = [
     "excel files",
     "Old versions",
@@ -72,7 +70,7 @@ for hospital_name in hospital_names:
             print(f"Processing form: {form_name} for hospital: {hospital_name}")
 
             form_path = os.path.join(
-                global_path, "dataset", hospital_name, f"genomit-{form_name}.csv"
+                global_path, "data", hospital_name, f"genomit-{form_name}.csv"
             )
             df_form = pd.read_csv(form_path, sep="\t")
 

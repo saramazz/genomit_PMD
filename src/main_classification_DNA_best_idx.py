@@ -29,8 +29,20 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
-from sklearn.model_selection import train_test_split, GridSearchCV, LeaveOneGroupOut, KFold
-from sklearn.metrics import classification_report, confusion_matrix, precision_recall_curve, mean_squared_error, f1_score, make_scorer
+from sklearn.model_selection import (
+    train_test_split,
+    GridSearchCV,
+    LeaveOneGroupOut,
+    KFold,
+)
+from sklearn.metrics import (
+    classification_report,
+    confusion_matrix,
+    precision_recall_curve,
+    mean_squared_error,
+    f1_score,
+    make_scorer,
+)
 from sklearn.feature_selection import SelectPercentile, SelectKBest, mutual_info_classif
 from sklearn.preprocessing import StandardScaler
 from sklearn.ensemble import RandomForestClassifier
@@ -39,12 +51,16 @@ from sklearn.pipeline import Pipeline
 from sklearn.svm import SVC
 from sklearn.feature_selection import SequentialFeatureSelector
 from xgboost import XGBClassifier
-from catboost import CatBoostClassifier
+
+# from catboost import CatBoostClassifier
 from scipy.stats import mode
 import shap
 from imblearn.over_sampling import SMOTE
 from imblearn.under_sampling import RandomUnderSampler
 from sklearn.tree import DecisionTreeClassifier
+
+# import for datetime
+from datetime import datetime
 
 
 ### Locally defined modules:
@@ -52,6 +68,7 @@ from sklearn.tree import DecisionTreeClassifier
 from config import global_path, saved_result_path_classification
 from utilities import *
 from processing import *
+from preprocessing import *
 from plotting import *
 
 # Set the random seed for reproducibility
@@ -63,10 +80,10 @@ IMPORT DATA
 
 # Redirect the standard output to a file
 current_datetime = datetime.now().strftime("%Y%m%d_%H%M%S")
-file_name = f"classification_reports_FINAL.txt"
+file_name = f"classification_reports.txt"  # _{current_datetime}.txt"
 
 # Redirect the standard output to the file
-sys.stdout = open(os.path.join(saved_result_path_classification, file_name), "w")
+# sys.stdout = open(os.path.join(saved_result_path_classification, file_name), "w")
 
 
 # Load Global DataFrame with only first visit data
@@ -83,7 +100,7 @@ print(
 )
 
 
-# print dataset info
+# print data info
 
 # Filter out NaN values for each column
 df_sex = df["sex"].dropna()
@@ -200,7 +217,7 @@ FEATURE SELECTION
 """
 
 # Load the important variables from Excel
-important_vars_path = os.path.join(global_path, "dataset", "important_variables.xlsx")
+important_vars_path = os.path.join(global_path, "data", "important_variables.xlsx")
 df_vars = pd.read_excel(important_vars_path)
 
 # Specify the column name for considering variables
@@ -209,6 +226,8 @@ column_name = "consider for mtDNA vs nDNA classification?"
 # Get the list of columns to drop based on 'N' in the specified column
 columns_to_drop = list(df_vars.loc[df_vars[column_name] == "N", "variable"])
 
+# print the columns of the df
+# print("Columns of the df:", df.columns)
 # Additional columns to drop
 additional_columns_to_drop = [
     "Hospital",
@@ -240,7 +259,7 @@ df_raw = df.copy()  # save the raw data non numerical
 y = df["gendna_type"]
 
 # Load the important variables from Excel
-important_vars_path = os.path.join(global_path, "dataset", "important_variables.xlsx")
+important_vars_path = os.path.join(global_path, "data", "important_variables.xlsx")
 df_vars = pd.read_excel(important_vars_path)
 
 # Specify the column name for considering variables
@@ -264,13 +283,6 @@ print("\nType and Dimension of y:")
 print(type(y), y.shape)
 
 
-
-# print the number of patients for each hospital
-print("Number of patients for each hospital")
-print(df["Hospital"].value_counts())
-
-time.sleep(40)
-
 """
 splitting into training and testing
 """
@@ -280,21 +292,20 @@ splitting into training and testing
 
 # Define experiment parameters and split the data saving in a pickle file IMPORTING FROM THE PREVIOUS SCRIPT
 config_path = os.path.join(
-    saved_result_path, "classifiers_results/experiments/classifier_configuration.pkl"
+    saved_result_path,
+    "classifiers_results/experiments_all_models/classifier_configuration.pkl",
 )
 config_dict = pd.read_pickle(config_path)
 
 test_subjects = config_dict["test_subjects"]
 
+
 # Creating the training and test sets
 test_set = df[df["subjid"].isin(test_subjects)]
 train_set = df[~df["subjid"].isin(test_subjects)]
+X_train = train_set.drop(columns=["subjid", "gendna"])
+X_test = test_set.drop(columns=["subjid", "gendna"])
 
-X_train = train_set.drop(columns=["subjid", "gendna_type", "gendna"])
-y_train = train_set["gendna_type"]
-
-X_test = test_set.drop(columns=["subjid", "gendna_type", "gendna"])
-y_test = test_set["gendna_type"]
 
 features = X_train.columns
 
@@ -310,8 +321,39 @@ num_folds = config_dict["num_folds"]
 
 
 print("Features names:", features)
-print("X_df shape:", X_df.shape)
 
+# convert features to a csv to save it
+features = list(features)
+features_path = os.path.join(saved_result_path_classification, "features.txt")
+
+with open(features_path, 'w') as file:
+    for item in features:
+        file.write(f"{item}\n")
+
+feature_names_df = pd.DataFrame(features, columns=["Feature Names"])
+# save the features in a file
+
+feature_names_df.to_csv(features_path, index=False, header=False)
+# pause 40 sec
+time.sleep(40)
+
+
+# Close the file and restore the standard output
+sys.stdout.close()
+sys.stdout = sys.__stdout__
+
+
+# ask if to continue
+print("Do you want to continue with the classification?")
+print("Press 'y' to continue or 'n' to stop")
+answer = input()
+if answer == "n":
+    sys.exit()
+
+
+"""
+OVERSAMPLING AND CLASSIFICATION
+"""
 
 print("X_train shape:", X_train.shape)
 print("X_test shape:", X_test.shape)
@@ -900,7 +942,7 @@ df = pd.DataFrame(
     data, columns=["Number of Features", "Last feature added", "Percentage Explained"]
 )
 
-print("Dataset of the progress of the importance:")
+print("data of the progress of the importance:")
 # Print DataFrame
 print(df)
 

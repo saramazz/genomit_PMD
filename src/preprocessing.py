@@ -73,10 +73,10 @@ def find_common_important_vars(hospital_names, form_names, global_path, df_vars)
         # Check common variables
         for form_name in form_names:
             # print(f'  Processing form_name: {form_name}')
-            # /content/drive/MyDrive/Colab Notebooks/GENOMIT/GENOMIT_Shared/dataset/Pisa
+            # /content/drive/MyDrive/Colab Notebooks/GENOMIT/GENOMIT_Shared/data/Pisa
             try:
                 form_path = os.path.join(
-                    global_path, "dataset", hospital_name, f"genomit-{form_name}.csv"
+                    global_path, "data", hospital_name, f"genomit-{form_name}.csv"
                 )
                 df_form = pd.read_csv(form_path, sep="\t")
 
@@ -342,7 +342,7 @@ def get_unique_columns(hospital_names, global_path):
     # Iterate over hospitals
     for hospital_name in hospital_names:
         # Form path for the hospital
-        hospital_path = os.path.join(global_path, "dataset", hospital_name)
+        hospital_path = os.path.join(global_path, "data", hospital_name)
 
         # Check if the hospital folder exists
         if os.path.exists(hospital_path):
@@ -378,7 +378,7 @@ def calculate_total(global_path, form_names, hospital_names, calc_type="patients
             try:
 
                 form_path = os.path.join(
-                    global_path, "dataset", hospital_name, f"genomit-{form_name}.csv"
+                    global_path, "data", hospital_name, f"genomit-{form_name}.csv"
                 )
                 df_form = pd.read_csv(form_path, sep="\t")
 
@@ -514,19 +514,19 @@ def add_top5_symptoms_columns(
         # Consent form, Symptoms form, and PMD form
         consent_path = os.path.join(
             global_path,
-            "dataset",
+            "data",
             hospital_name,
             f"genomit-{consent_form_name}.{file_extension}",
         )
         symptoms_path = os.path.join(
             global_path,
-            "dataset",
+            "data",
             hospital_name,
             f"genomit-{symptoms_form_name}.{file_extension}",
         )
         pmd_path = os.path.join(
             global_path,
-            "dataset",
+            "data",
             hospital_name,
             f"genomit-{pmd_form_name}.{file_extension}",
         )
