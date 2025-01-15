@@ -30,7 +30,12 @@ saved_result_path = os.path.join(
 print("Save result path:", saved_result_path)
 
 saved_result_path_classification = os.path.join(
-    saved_result_path, "classifiers_results/patient_analysis"
+    saved_result_path, "classifiers_results"
+)
+
+#saving folder for classification models
+saved_result_path_classification_models = os.path.join(
+    saved_result_path_classification, "models"
 )
 
 saved_result_path_survey = os.path.join(saved_result_path, "survey")
@@ -43,6 +48,8 @@ if not os.path.exists(saved_result_path_classification) :
     os.makedirs(saved_result_path_classification)
 if not os.path.exists(saved_result_path_survey) :
     os.makedirs(saved_result_path_survey)
+if not os.path.exists(saved_result_path_classification_models) :
+    os.makedirs(saved_result_path_classification_models)
 
 
 

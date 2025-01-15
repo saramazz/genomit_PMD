@@ -1,3 +1,8 @@
+"""
+Code to analyze the patients in the training and test set and the patients excluded from the training and test set.
+Histograms of the missing values in the full dataset, in the training and test set, and in the excluded patients are created.
+"""
+
 # Local imports
 from config import global_path, saved_result_path_classification
 from utilities import *
@@ -127,7 +132,7 @@ print("Dimensions of excluded_patients:", excluded_patients.shape)
 
 # Function to create a bar plot
 def plot_missing_data(missing_data, title):
-    plt.figure(figsize=(10, 6))
+    plt.figure(figsize=(28, 15))
     missing_data.plot(kind="bar")
     plt.title(f"Missing Values Percentage in {title}")
     plt.xlabel("Features")
@@ -144,6 +149,9 @@ def plot_missing_data(missing_data, title):
 # Create bar plots
 plot_missing_data(missing_df_sorted, "df")
 plot_missing_data(missing_excluded_sorted, "excluded_patients")
+
+# print that the plots have being saved to the folder
+print("Plots saved in the folder:", saved_result_path_classification)
 
 
 # Calculate missing values percentage
@@ -166,5 +174,66 @@ missing_comparison = pd.DataFrame(
 print("Comparison of missing values percentages:\n")
 print(missing_comparison)
 
+
+# Create a grouped bar plot for missing values
+def plot_missing_comparison(missing_comparison, save_path):
+    # Sort the DataFrame by "difference_percent" in descending order
+    missing_comparison = missing_comparison.sort_values(
+        by="difference_percent", ascending=False
+    )
+
+    # Define the positions for each bar group
+    x = np.arange(len(missing_comparison.index))
+
+    # Set bar width
+    bar_width = 0.25
+
+    # Create the grouped bar plot
+    plt.figure(figsize=(20, 10))
+    plt.bar(
+        x - bar_width,
+        missing_comparison["df_missing_percent"],
+        width=bar_width,
+        label="Total dataset",
+        color="blue",
+        alpha=0.7,
+    )
+    plt.bar(
+        x,
+        missing_comparison["excluded_patients_missing_percent"],
+        width=bar_width,
+        label="Excluded patients",
+        color="orange",
+        alpha=0.7,
+    )
+    plt.bar(
+        x + bar_width,
+        missing_comparison["difference_percent"],
+        width=bar_width,
+        label="Difference tot-excl",
+        color="green",
+        alpha=0.7,
+    )
+
+    # Add labels and title
+    plt.title("Comparison of Missing Values Percentages by Feature", fontsize=16)
+    plt.xlabel("Features", fontsize=14)
+    plt.ylabel("Percentage of Missing Values", fontsize=14)
+    plt.xticks(x, missing_comparison.index, rotation=45, ha="right", fontsize=12)
+    plt.legend(fontsize=12)
+    plt.grid(axis="y", linestyle="--", alpha=0.7)
+
+    # Save the plot
+    plot_file = "GroupedBar_MissingValues_Comparison.png"
+    plt.savefig(os.path.join(save_path, plot_file), bbox_inches="tight")
+    plt.show()
+
+    # Confirm that the plot has been saved
+    print(f"Grouped bar plot saved in the folder: {save_path}")
+
+
+# print an hist of the difference_percent in the missing values, df_missing_percent  excluded_patients_missing_percent in a single hist
+# Plot the grouped bar chart
+plot_missing_comparison(missing_comparison, saved_result_path_classification)
 
 # print the distribution of missing values in the full data and in the train+ test set and in the patient excluded

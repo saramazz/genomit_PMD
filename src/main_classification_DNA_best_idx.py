@@ -269,6 +269,8 @@ column_name = "consider for mtDNA vs nDNA classification?"
 # Get the list of columns to drop based on 'N' in the specified column
 df.drop(columns=columns_to_drop, inplace=True)
 
+
+
 # Assign the processed dataframe to X_df
 X_df = df
 
@@ -281,6 +283,39 @@ print(type(X), X.shape)
 
 print("\nType and Dimension of y:")
 print(type(y), y.shape)
+
+#save y and X in a file
+# Define the paths to save X and y
+saving_path = os.path.join(saved_result_path_classification, "saved_data")
+os.makedirs(saving_path, exist_ok=True)
+
+x_file_path = os.path.join(saving_path, "X.pkl")
+y_file_path = os.path.join(saving_path, "y.pkl")
+
+# Save X and y using pickle
+with open(x_file_path, "wb") as x_file:
+    pickle.dump(X, x_file)
+
+with open(y_file_path, "wb") as y_file:
+    pickle.dump(y, y_file)
+
+print(f"Features (X) saved to: {x_file_path}")
+print(f"Labels (y) saved to: {y_file_path}")
+
+#add y column and save df_X_y in a file
+df_X_y = X_df
+df_X_y_path = os.path.join(saving_path, "df_X_y.pkl")
+df_X_y.to_pickle(df_X_y_path)
+
+#print the dimension of df_X_y
+print("df_X_y shape:", df_X_y.shape)
+
+# ask if to continue
+print("Do you want to continue with the classification?")
+print("Press 'y' to continue or 'n' to stop")
+answer = input()
+if answer == "n":
+    sys.exit()
 
 
 """
@@ -326,7 +361,7 @@ print("Features names:", features)
 features = list(features)
 features_path = os.path.join(saved_result_path_classification, "features.txt")
 
-with open(features_path, 'w') as file:
+with open(features_path, "w") as file:
     for item in features:
         file.write(f"{item}\n")
 

@@ -363,7 +363,8 @@ def precision_recall_plot(gt, pp, title, file_name, global_path):
 
 def plot_confusion_matrix(y_true, y_pred, file_name):
     # Confusion matrix
-    conf_mat = metrics.confusion_matrix(y_true, y_pred)
+    # conf_mat = metrics.confusion_matrix(y_true, y_pred)
+    conf_mat = confusion_matrix(y_true, y_pred)
 
     # Define class labels
     class_labels = ["mtDNA", "nDNA"]
