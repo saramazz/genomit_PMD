@@ -129,7 +129,6 @@ def build_improved_mlp(input_dim):
     model.add(Dense(1, activation="sigmoid"))  # Binary classification output layer
     return model
 
-
 # Compile the improved model
 improved_mlp = build_mlp_simple(X_train.shape[1])
 improved_mlp.compile(
@@ -145,6 +144,58 @@ early_stopping = EarlyStopping(
 reduce_lr = ReduceLROnPlateau(
     monitor="val_loss", factor=0.5, patience=5, min_lr=1e-6, verbose=1
 )
+
+################# Modify here FP #################
+# Hyperparameter tuning for MLP model (e.g., with GridSearchCV)
+# Create a MLP model with not fixed number of hidden layers
+
+from keras import Hyperband
+
+input_shape = X_train.shape[1]
+
+def build_MLP_model_hp(hp):  # Function to be modified in input parameters (e.g., hp defined outside the function)
+    model = Sequential()
+    model.add(Dense(input(shape = input_shape)))
+    for i in range(hp.Int("hidden_layers", 1, 5)):
+        model.add(Dense(units=hp.Int(f"units_{i}",min_value=32,max_value=256, step=32),
+                        activation=hp.Choice(f"activation_{i}",values=["relu", "tanh", "sigmoid"])))
+
+    model.add(Dense(1, activation="softmax"))
+    model.compile(optimized=Adam(hp.Choice("learning_rate", values=["0.01", "0.001", "0.0001"])),
+                  loss="binary_crossentropy",
+                  metrics=["accuracy"])
+    return model
+
+param_grid = Hyperband(build_MLP_model_hp(),
+                       objective="val_accuracy",
+                       max_epochs=200,
+                       factor=3,
+                       directory="mlp_tuning",
+                       project_name="mlp_tuning"
+                       )
+
+# Hyperparameter search
+param_grid.search(
+    X_train, 
+    y_train,
+    validation_split=0.2,
+    batch_size=64,
+    callbacks=[early_stopping, reduce_lr])
+
+# Get best hyperparameters
+best_hps = param_grid.get_best_hyperparameters(num_trials=1)[0]
+
+# Train the best model
+best_model = param_grid.hypermodel.build(best_hps)
+mlp_hp = best_model.fit(
+    X_train,
+    y_train,
+    epochs=200,
+    batch_size=64,
+    validation_split=0.2,
+    callbacks=[early_stopping, reduce_lr],
+)
+################# END FP #################
 
 # Train the improved MLP model with class weights
 improved_mlp.fit(
