@@ -30,7 +30,7 @@ saved_result_path = os.path.join(
 print("Save result path:", saved_result_path)
 
 saved_result_path_classification = os.path.join(
-    saved_result_path, "classifiers_results"
+    saved_result_path, "classifiers_results/patient_analysis"
 )
 
 #saving folder for classification models

@@ -179,7 +179,7 @@ print(missing_comparison)
 def plot_missing_comparison(missing_comparison, save_path):
     # Sort the DataFrame by "difference_percent" in descending order
     missing_comparison = missing_comparison.sort_values(
-        by="difference_percent", ascending=False
+        by="df_missing_percent", ascending=False
     )
 
     # Define the positions for each bar group
@@ -236,4 +236,55 @@ def plot_missing_comparison(missing_comparison, save_path):
 # Plot the grouped bar chart
 plot_missing_comparison(missing_comparison, saved_result_path_classification)
 
+#print the df_missing_percent
+#sort the missing_comparison by df_missing_percent
+missing_comparison = missing_comparison.sort_values(by="df_missing_percent", ascending=False)
+print(missing_comparison["df_missing_percent"])
+#save missing_comparison["df_missing_percent"] to a file
+missing_comparison["df_missing_percent"].to_csv(os.path.join(saved_result_path_classification, "missing_comparison_df_missing_percent.csv"))
+
 # print the distribution of missing values in the full data and in the train+ test set and in the patient excluded
+# Create a grouped bar plot for missing values
+def plot_missing_tot_df(missing_comparison, save_path):
+    # Sort the DataFrame by "difference_percent" in descending order
+    missing_comparison = missing_comparison.sort_values(
+        by="df_missing_percent", ascending=False
+    )
+
+    # Define the positions for each bar group
+    x = np.arange(len(missing_comparison.index))
+
+    # Set bar width
+    bar_width = 0.25
+
+    # Create the grouped bar plot
+    plt.figure(figsize=(20, 10))
+    plt.bar(
+        x - bar_width,
+        missing_comparison["df_missing_percent"],
+        width=bar_width,
+        label="Total dataset",
+        color="blue",
+        alpha=0.7,
+    )
+
+    # Add labels and title
+    plt.title("Comparison of Missing Values Percentages by Feature", fontsize=16)
+    plt.xlabel("Features", fontsize=14)
+    plt.ylabel("Percentage of Missing Values", fontsize=14)
+    plt.xticks(x, missing_comparison.index, rotation=45, ha="right", fontsize=12)
+    plt.legend(fontsize=12)
+    plt.grid(axis="y", linestyle="--", alpha=0.7)
+
+    # Save the plot
+    plot_file = "GroupedBar_MissingValues_Tot_df.png"
+    plt.savefig(os.path.join(save_path, plot_file), bbox_inches="tight")
+    plt.show()
+
+    # Confirm that the plot has been saved
+    print(f"Grouped bar plot saved in the folder: {save_path}")
+
+
+# print an hist of the difference_percent in the missing values, df_missing_percent  excluded_patients_missing_percent in a single hist
+# Plot the grouped bar chart
+plot_missing_tot_df(missing_comparison, saved_result_path_classification)
