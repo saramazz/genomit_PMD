@@ -145,6 +145,22 @@ reduce_lr = ReduceLROnPlateau(
     monitor="val_loss", factor=0.5, patience=5, min_lr=1e-6, verbose=1
 )
 
+"""
+Use the following lines to build, train, and test a MLP model with hyperparameter tuning. 
+Remove:
+
+improved_mlp.fit(
+    X_train,
+    y_train,
+    epochs=200,
+    batch_size=64,
+    validation_split=0.2,
+    callbacks=[early_stopping, reduce_lr],
+)
+
+in the following to avoid overwritting the model trained with hyperparameter tuning.
+"""
+
 ################# Modify here FP #################
 # Hyperparameter tuning for MLP model (e.g., with GridSearchCV)
 # Create a MLP model with not fixed number of hidden layers
@@ -187,7 +203,7 @@ best_hps = param_grid.get_best_hyperparameters(num_trials=1)[0]
 
 # Train the best model
 best_model = param_grid.hypermodel.build(best_hps)
-mlp_hp = best_model.fit(
+improved_mlp = best_model.fit(
     X_train,
     y_train,
     epochs=200,
