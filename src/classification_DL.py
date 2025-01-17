@@ -46,6 +46,10 @@ import numpy as np
 from imblearn.over_sampling import SMOTE
 from collections import Counter
 
+import tensorflow as tf
+from tensorflow import keras
+from keras_tuner.tuners import Hyperband
+
 # Set a random seed for reproducibility
 np.random.seed(42)
 
@@ -145,6 +149,38 @@ reduce_lr = ReduceLROnPlateau(
     monitor="val_loss", factor=0.5, patience=5, min_lr=1e-6, verbose=1
 )
 
+
+# Evaluate and print classification reports and confusion matrices
+def evaluate_and_print_results(model, X_train, y_train, X_test, y_test):
+    y_train_pred = (model.predict(X_train) > 0.5).astype("int32")
+    y_test_pred = (model.predict(X_test) > 0.5).astype("int32")
+
+    print("\nTraining Set Performance:")
+    print(classification_report(y_train, y_train_pred))
+    print(confusion_matrix(y_train, y_train_pred))
+
+    print("\nTesting Set Performance:")
+    print(classification_report(y_test, y_test_pred))
+    print(confusion_matrix(y_test, y_test_pred))
+
+    # Train the improved MLP model with class weights
+improved_mlp.fit(
+    X_train,
+    y_train,
+    epochs=200,
+    batch_size=64,
+    validation_split=0.2,
+    callbacks=[early_stopping, reduce_lr],
+)
+
+
+
+# Check performance of the improved MLP model
+evaluate_and_print_results(improved_mlp, X_train, y_train, X_test, y_test)
+
+#Print "starting the analysis with grid search"
+print("Starting the analysis with GridSearchCV")
+
 """
 Use the following lines to build, train, and test a MLP model with hyperparameter tuning. 
 Remove:
@@ -165,10 +201,12 @@ in the following to avoid overwritting the model trained with hyperparameter tun
 # Hyperparameter tuning for MLP model (e.g., with GridSearchCV)
 # Create a MLP model with not fixed number of hidden layers
 
-from keras import Hyperband
+#from keras import Hyperband
 
 input_shape = X_train.shape[1]
 
+
+'''
 def build_MLP_model_hp(hp):  # Function to be modified in input parameters (e.g., hp defined outside the function)
     model = Sequential()
     model.add(Dense(input(shape = input_shape)))
@@ -182,7 +220,40 @@ def build_MLP_model_hp(hp):  # Function to be modified in input parameters (e.g.
                   metrics=["accuracy"])
     return model
 
-param_grid = Hyperband(build_MLP_model_hp(),
+
+# Instantiate Hyperband Tuner
+param_grid = Hyperband(
+    build_MLP_model_hp,
+    objective="val_accuracy",
+    max_epochs=200,
+    factor=3,
+    directory="mlp_tuning",
+    project_name="mlp_tuning"
+)
+'''
+#descrive the function to build the model
+
+def build_MLP_model_hp(hp):
+    model = Sequential()
+
+    # Define the input layer
+    model.add(Dense(units=hp.Int('input_units', min_value=32, max_value=256, step=32), input_shape=(input_shape,), activation='relu'))
+
+    # Add hidden layers
+    for i in range(hp.Int("hidden_layers", 1, 5)):
+        model.add(Dense(units=hp.Int(f"units_{i}",min_value=32,max_value=256, step=32),
+                        activation=hp.Choice(f"activation_{i}",values=["relu", "tanh", "sigmoid"])))
+
+    # Define the output layer
+    model.add(Dense(1, activation="sigmoid"))
+
+    # Compile the model
+    model.compile(optimizer=Adam(hp.Choice("learning_rate", values=[0.01, 0.001, 0.0001])),
+                  loss="binary_crossentropy",
+                  metrics=["accuracy"])
+    return model
+
+param_grid = Hyperband(build_MLP_model_hp,
                        objective="val_accuracy",
                        max_epochs=200,
                        factor=3,
@@ -211,35 +282,13 @@ improved_mlp = best_model.fit(
     validation_split=0.2,
     callbacks=[early_stopping, reduce_lr],
 )
-################# END FP #################
-
-# Train the improved MLP model with class weights
-improved_mlp.fit(
-    X_train,
-    y_train,
-    epochs=200,
-    batch_size=64,
-    validation_split=0.2,
-    callbacks=[early_stopping, reduce_lr],
-)
-
-
-# Evaluate and print classification reports and confusion matrices
-def evaluate_and_print_results(model, X_train, y_train, X_test, y_test):
-    y_train_pred = (model.predict(X_train) > 0.5).astype("int32")
-    y_test_pred = (model.predict(X_test) > 0.5).astype("int32")
-
-    print("\nTraining Set Performance:")
-    print(classification_report(y_train, y_train_pred))
-    print(confusion_matrix(y_train, y_train_pred))
-
-    print("\nTesting Set Performance:")
-    print(classification_report(y_test, y_test_pred))
-    print(confusion_matrix(y_test, y_test_pred))
-
 
 # Check performance of the improved MLP model
 evaluate_and_print_results(improved_mlp, X_train, y_train, X_test, y_test)
+
+
+################# END FP #################
+
 
 # Close the file and restore the standard output
 sys.stdout.close()

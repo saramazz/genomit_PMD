@@ -33,6 +33,7 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import classification_report, confusion_matrix
 import pickle
 
+
 # Set a random seed for reproducibility
 np.random.seed(42)
 
