@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+from torch.utils.data import DataLoader, TensorDataset, random_split
 import numpy as np
 
 import sys
@@ -7,6 +8,7 @@ from datetime import datetime
 
 from sklearn.metrics import classification_report, confusion_matrix
 from imblearn.over_sampling import SMOTE
+from imblearn.under_sampling import RandomUnderSampler
 from collections import Counter
 
 from config import (
@@ -34,8 +36,12 @@ class MLP_model(nn.Module):
     def __init__(self, input_dim, hidden_layer, activation_func):
         super(MLP_model, self).__init__()
         self.layer1 = nn.Linear(input_dim, 56)
+        self.batch_norm = nn.BatchNorm1d(56)
+        self.dropout = nn.Dropout(0.2)
         self.activation_func = self.get_activation_func(activation_func)
         self.layer2 = nn.Linear(56, hidden_layer)
+        self.batch_norm2 = nn.BatchNorm1d(hidden_layer)
+        self.dropout2 = nn.Dropout(0.2)
         self.layer3 = nn.Linear(hidden_layer, 1)
         self.sigmoid = nn.Sigmoid()
 
@@ -50,14 +56,20 @@ class MLP_model(nn.Module):
             return nn.SiLU()
         elif activation_func == "gelu":
             return nn.GELU()
+        elif activation_func == "leaky_relu":
+            return nn.LeakyReLU()
         else:
             raise ValueError(f"Unsupported activation function: {activation_func}")
 
     def forward(self, x):
         x = self.layer1(x)
+        x = self.batch_norm(x)
         x = self.activation_func(x)
+        x = self.dropout(x)
         x = self.layer2(x)
+        x = self.batch_norm2(x)
         x = self.activation_func(x)
+        x = self.dropout2(x)
         x = self.layer3(x)
         x = self.sigmoid(x)
         return x
@@ -67,13 +79,21 @@ class DNN_model(nn.Module):
     def __init__(self, input_dim, hidden_layer, activation_func):
         super(DNN_model, self).__init__()
         self.layer1 = nn.Linear(input_dim, 56)
+        self.batch_norm = nn.BatchNorm1d(56)
+        self.dropout = nn.Dropout(0.2)
         self.activation_func = self.get_activation_func(activation_func)
         self.hidden_layers = nn.ModuleList()
+        self.batch_norms = nn.ModuleList()
+        self.dropouts = nn.ModuleList()
         for i in range(len(hidden_layer)):
             if i == 0:
                 self.hidden_layers.append(nn.Linear(56, hidden_layer[i]))
+                self.batch_norms.append(nn.BatchNorm1d(hidden_layer[i]))
+                self.dropouts.append(nn.Dropout(0.2))
             else:
                 self.hidden_layers.append(nn.Linear(hidden_layer[i-1], hidden_layer[i]))
+                self.batch_norms.append(nn.BatchNorm1d(hidden_layer[i]))
+                self.dropouts.append(nn.Dropout(0.2))
         self.layerOut = nn.Linear(hidden_layer[-1], 1)
         self.sigmoid = nn.Sigmoid()
 
@@ -88,17 +108,23 @@ class DNN_model(nn.Module):
             return nn.SiLU()
         elif activation_func == "gelu":
             return nn.GELU()
+        elif activation_func == "leaky_relu":
+            return nn.LeakyReLU()
         else:
             raise ValueError(f"Unsupported activation function: {activation_func}")
+        
     def forward(self, x):
         x = self.layer1(x)
+        x = self.batch_norm(x)
         x = self.activation_func(x)
-        for layer in self.hidden_layers:
+        x = self.dropout(x)
+        for i, layer in enumerate(self.hidden_layers):
             x = layer(x)
+            x = self.batch_norms[i](x)
             x = self.activation_func(x)
+            x = self.dropouts[i](x)
         x = self.layerOut(x)
         x = self.sigmoid(x)
-        return x
         return x
 ################################################################################
 
@@ -165,10 +191,24 @@ train_labels = torch.tensor(y_train.values, dtype=torch.float32).unsqueeze(1).to
 test_inputs = torch.tensor(X_test.values, dtype=torch.float32).to(device)
 test_labels = torch.tensor(y_test.values, dtype=torch.float32).unsqueeze(1).to(device)
 
+batch_size = 64
+validation_split = 0.2
+num_train_samples = int((1 - validation_split) * len(train_inputs))
+num_val_samples = len(train_inputs) - num_train_samples
+
+train_dataset, val_dataset = random_split(
+    TensorDataset(train_inputs, train_labels),
+    [num_train_samples, num_val_samples],
+    generator=torch.Generator().manual_seed(42)
+)
+
+train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+val_loader = DataLoader(val_dataset, batch_size=batch_size)
+
 ######################################## MLP ########################################
 # Define the hyperparameters to tune for MLP
 params = {
-    'activation function': ['tanh', 'sigmoid', 'silu', 'gelu'],
+    'activation function': ['relu', 'leaky_relu', 'tanh', 'sigmoid', 'silu', 'gelu'],
     'hidden layer': [
         int(56/4),
         int(56/2),
@@ -182,25 +222,56 @@ params = {
 
 for activation_func in params['activation function']:
     for hidden_layer in params['hidden layer']:
-        model = MLP_model(input_dim=input_dim, hidden_layer=hidden_layer, activation_func=activation_func).to(device)
+        model = MLP_model(input_dim=input_dim, hidden_layer=hidden_layer, activation_func=activation_func).cuda()
         criterion = nn.BCELoss()
         for learning_rate in params['learning rate']:
             print(f"Evaluating: Activation: {activation_func}, Hidden Layers: {hidden_layer}, Learning Rate: {learning_rate}")
             optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
-            for epoch in range(200):
-                # Forward pass
-                train_outputs = model(train_inputs)
-                loss = criterion(train_outputs, train_labels)
-                optimizer.zero_grad()
-                loss.backward()
-                optimizer.step()
+            scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=5, factor=0.5, min_lr=1e-6, verbose=True)
+            best_val_loss = float('inf')
+            early_stopping_counter = 0
+            early_stopping_patience = 10
+            for epoch in range(3000):
+                model.train()
+                train_loss = 0.0
+                for inputs, labels in train_loader:
+                    inputs, labels = inputs.to(device), labels.to(device)
+                    train_outputs = model(inputs)
+                    loss = criterion(train_outputs, labels)
+                    optimizer.zero_grad()
+                    loss.backward()
+                    optimizer.step()
+                    train_loss += loss.item() * inputs.size(0)
+
+                train_loss /= len(train_loader.dataset)
+                model.eval()
+                val_loss = 0.0
+                with torch.no_grad():
+                    for inputs, labels in val_loader:
+                        inputs, labels = inputs.to(device), labels.to(device)
+                        val_outputs = model(inputs)
+                        loss = criterion(val_outputs, labels)
+                        val_loss += loss.item() * inputs.size(0)
+                val_loss /= len(val_loader.dataset)
+
+                scheduler.step(val_loss)
+
+                if val_loss < best_val_loss:
+                    best_val_loss = val_loss
+                    early_stopping_counter = 0
+                else:
+                    early_stopping_counter += 1
+                    if early_stopping_counter > early_stopping_patience:
+                        print(f"Early stopping at epoch {epoch}")
+                        break
 
             # Evaluate the model on the test set
             model.eval()
             with torch.no_grad():
+                train_outputs = model(train_inputs)
                 test_outputs = model(test_inputs)
                 test_loss = criterion(test_outputs, test_labels)
-                evaluate_and_print_results(train_outputs,train_labels, test_outputs, test_labels, activation_func, hidden_layer, learning_rate)
+                evaluate_and_print_results(train_outputs, train_labels, test_outputs, test_labels, activation_func, hidden_layer, learning_rate)
 
 # Close the file and restore the standard output
 sys.stdout.close()
@@ -214,7 +285,7 @@ print(f"Shape of the data: {df.shape}")
 
 # Define the hyperparameters to tune for DNN
 params = {
-    'activation function': ['tanh', 'sigmoid', 'silu', 'gelu'],
+    'activation function': ['relu', 'leaky_relu' ,'tanh', 'sigmoid', 'silu', 'gelu'],
     'hidden layer': [
         (int(56/2),int(56/4),int(56/8)),
         (int(56/2),int(56/4)),
@@ -226,22 +297,53 @@ params = {
 
 for activation_func in params['activation function']:
     for hidden_layer in params['hidden layer']:
-        model = DNN_model(input_dim=input_dim, hidden_layer=hidden_layer, activation_func=activation_func).to(device)
+        model = DNN_model(input_dim=input_dim, hidden_layer=hidden_layer, activation_func=activation_func).cuda()
         criterion = nn.BCELoss()
         for learning_rate in params['learning rate']:
             print(f"Evaluating: Activation: {activation_func}, Hidden Layers: {hidden_layer}, Learning Rate: {learning_rate}")
             optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
-            for epoch in range(200):
-                model.train()  # Set the model to training mode
-                train_outputs = model(train_inputs)
-                loss = criterion(train_outputs, train_labels)
-                optimizer.zero_grad()
-                loss.backward()
-                optimizer.step()
-                
+            scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=5, factor=0.5, min_lr=1e-6, verbose=True)
+            best_val_loss = float('inf')
+            early_stopping_counter = 0
+            early_stopping_patience = 10
+            for epoch in range(3000):
+                model.train()
+                train_loss = 0.0
+                for inputs, labels in train_loader:
+                    inputs, labels = inputs.to(device), labels.to(device)
+                    train_outputs = model(inputs)
+                    loss = criterion(train_outputs, labels)
+                    optimizer.zero_grad()
+                    loss.backward()
+                    optimizer.step()
+                    train_loss += loss.item() * inputs.size(0)
+
+                train_loss /= len(train_loader.dataset)
+                model.eval()
+                val_loss = 0.0
+                with torch.no_grad():
+                    for inputs, labels in val_loader:
+                        inputs, labels = inputs.to(device), labels.to(device)
+                        val_outputs = model(inputs)
+                        loss = criterion(val_outputs, labels)
+                        val_loss += loss.item() * inputs.size(0)
+                val_loss /= len(val_loader.dataset)
+
+                scheduler.step(val_loss)
+
+                if val_loss < best_val_loss:
+                    best_val_loss = val_loss
+                    early_stopping_counter = 0
+                else:
+                    early_stopping_counter += 1
+                    if early_stopping_counter > early_stopping_patience:
+                        print(f"Early stopping at epoch {epoch}")
+                        break
+
             # Evaluate the model on the test set
             model.eval()
             with torch.no_grad():
+                train_outputs = model(train_inputs)
                 test_outputs = model(test_inputs)
                 test_loss = criterion(test_outputs, test_labels)
                 evaluate_and_print_results(train_outputs,train_labels, test_outputs, test_labels, activation_func, hidden_layer, learning_rate)
