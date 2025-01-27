@@ -12,6 +12,8 @@ from sklearn.preprocessing import LabelEncoder
 from config import global_path
 from sklearn import metrics
 
+from config import global_path, saved_result_path, important_vars_path
+
 """
 Functions to do import data and preprocess them
 """
@@ -54,7 +56,7 @@ def get_important_variables(file_path):
     # Calculate the initial number of total variables
     num_total_vars = len(df["variable"])
     # Calculate the percentage of reduced variables
-    percentage_reduced = (num_reduced_vars / num_total_vars) * 100
+    # percentage_reduced = (num_reduced_vars / num_total_vars) * 100
     # Print the results
     # print(f"List of Reduced Variables: {important_vars_list}")
     print(
@@ -67,6 +69,7 @@ def get_important_variables(file_path):
 def find_common_important_vars(hospital_names, form_names, global_path, df_vars):
     all_hospitals_found_vars = []
     for hospital_name in hospital_names:
+        print("-------------------------------------------------")
         print(f"  Processing hospital_name: {hospital_name}")
         found_vars = set()
         missing_vars_dict = {}
@@ -114,16 +117,124 @@ def find_common_important_vars(hospital_names, form_names, global_path, df_vars)
 
 
 def merge_patient_dataframes(hospital_names, saved_result_path):
-    dfs = [
-        pd.read_pickle(os.path.join(saved_result_path, "df", f"df_{hospital_name}.pkl"))
-        for hospital_name in hospital_names
-    ]
-    df = pd.concat(dfs, keys=hospital_names, names=["Hospital", "RowID"]).reset_index(
-        level="Hospital"
+    # Initialize an empty list to store individual DataFrame row counts
+    row_counts = []
+
+    # Load DataFrames from pickle files and calculate their row counts
+    dfs = []
+    for hospital_name in hospital_names:
+        df_path = os.path.join(saved_result_path, f"df_{hospital_name}.pkl")
+        if os.path.exists(df_path):
+            df = pd.read_pickle(df_path)
+            row_counts.append(len(df))
+            dfs.append(df)
+        else:
+            print(f"Warning: File for hospital '{hospital_name}' not found.")
+
+    # Concatenate DataFrames
+    final_df = pd.concat(
+        dfs, keys=hospital_names, names=["Hospital", "RowID"]
+    ).reset_index(level="Hospital")
+
+    # Save the concatenated DataFrame to a file
+    final_df.to_pickle(os.path.join(saved_result_path, "df_Global_raw.pkl"))
+
+    # Calculate total row count from individual DataFrames
+    total_individual_rows = sum(row_counts)
+
+    # Verify that the sum of individual DataFrame row counts equals the total number of rows in the final DataFrame
+    nRow, nCol = final_df.shape
+    if total_individual_rows != nRow:
+        print(
+            f"Warning: Mismatch in row counts. "
+            f"Sum of individual DataFrame rows ({total_individual_rows}) != Total rows in df_Global ({nRow})."
+        )
+    else:
+        print("Row count verification passed.")
+
+    print(f"There are {nRow} rows and {nCol} columns in the df_Global.")
+
+
+"""
+Missing values handling
+"""
+
+
+def fill_missing_values_imp_var(df):
+    """
+    Fill missing values in the DataFrame according to the instructions specified in an Excel file.
+
+    Parameters:
+    - df: DataFrame to process.
+    - global_path: Base path where the 'handle_missing.xlsx' Excel file is located.
+
+    Returns:
+    - DataFrame with missing values handled.
+    """
+    # Path to the spreadsheet that contains missing values handling information
+    missing_values_path = os.path.join(
+        global_path, "variables_mapping", "handle_missing.csv"
     )
-    df.to_pickle(os.path.join(saved_result_path, "df", "df_Global.pkl"))
-    nRow, nCol = df.shape
-    print(f"There are {nRow} rows and {nCol} columns in the df_Global")
+
+    # Read the missing values handling instructions
+    missing_values_df = pd.read_csv(missing_values_path)
+
+    # Track columns that are entirely missing before dropping them
+    columns_before_drop = set(df.columns)
+
+    # Remove columns that are entirely missing
+    df = df.dropna(axis=1, how="all")
+
+    # Identify and log removed columns
+    columns_after_drop = set(df.columns)
+    removed_columns = columns_before_drop - columns_after_drop
+    if removed_columns:
+        print(f"Columns removed because they were all missing: {removed_columns}")
+
+    # Iterate over each variable in the handling instructions
+    for index, row in missing_values_df.iterrows():
+        variable = row["variable_name"]
+        handler = row["handle_value"]
+
+        # Check if the current variable is in the DataFrame
+        if variable in df.columns:
+            if handler == "if MRI mettere 0, altrimenti Nan":
+                # If the instruction is 'if MRI', set missing values conditionally based on 'pimgtype'
+                # Assuming 'pimgtype' and 'MRI' are identified in the data
+                df[variable] = df.apply(
+                    lambda x: 0 if x["pimgtype"] == 2 else x[variable], axis=1
+                )
+            else:
+                # Otherwise, replace missing values with the specified handler value
+                df[variable].fillna(handler, inplace=True)
+    # substitute 'NaN' with np.nan
+    df.replace("NaN", np.nan, inplace=True)
+
+    return df
+
+
+def check_multiple_patients(df, subjid_column, date_column, saved_result_path):
+    # Identify rows with the same 'subjid' and 'visdat' but at least one different column value
+    duplicate_rows = df[df.duplicated(subset=[subjid_column, date_column], keep=False)]
+    if not duplicate_rows.empty:
+        # Save the duplicate rows to an Excel file
+        name = "/duplicate_rows.csv"
+        duplicate_rows.to_csv(saved_result_path + name, index=False)
+
+        # Insert column names as the first row
+        duplicate_rows = pd.concat(
+            [df.columns.to_frame().T, duplicate_rows], ignore_index=True
+        )
+
+        print(
+            f"Number of rows with same 'subjid' and 'visdat' but different values: {len(duplicate_rows) - 1}"
+        )
+    else:
+        print("No rows with same 'subjid' and 'visdat' but different values.")
+
+    # Optionally, display the DataFrame with duplicate rows
+    print(duplicate_rows)
+    return df
 
 
 """PRIORITARIZATION"""
@@ -261,7 +372,7 @@ def process_pimgres_mrisll(df):
     return df
 
 
-def process_form(subjid_df, form_name, vars):
+def process_form(subjid_df, form_name, vars, max_symps):
     # prioritarization geneticresults_log
     if "geneticresultlog" in form_name:
         # subjid_df['epiphen'] = 0
@@ -502,122 +613,96 @@ def add_top5_symptoms_columns(
     symptoms_form_name,
     pmd_form_name,
 ):
-    top5_columns = [
-        f"symp_on_{i}" for i in range(1, 6)
-    ]  # Define the column names outside the loop
+
+    # Define the column names outside the loop
+    top5_columns = [f"symp_on_{i}" for i in range(1, 6)]
     all_symptoms_dfs = []  # List to store symptoms_df for each hospital
 
     for hospital_name in hospital_names:
-        # Determine file extension based on hospital_name
-        file_extension = "csv"
+        # Define file paths
+        base_path = os.path.join(global_path, "data", hospital_name)
+        consent_path = os.path.join(base_path, f"genomit-{consent_form_name}.csv")
+        symptoms_path = os.path.join(base_path, f"genomit-{symptoms_form_name}.csv")
+        pmd_path = os.path.join(base_path, f"genomit-{pmd_form_name}.csv")
 
-        # Consent form, Symptoms form, and PMD form
-        consent_path = os.path.join(
-            global_path,
-            "data",
-            hospital_name,
-            f"genomit-{consent_form_name}.{file_extension}",
-        )
-        symptoms_path = os.path.join(
-            global_path,
-            "data",
-            hospital_name,
-            f"genomit-{symptoms_form_name}.{file_extension}",
-        )
-        pmd_path = os.path.join(
-            global_path,
-            "data",
-            hospital_name,
-            f"genomit-{pmd_form_name}.{file_extension}",
-        )
-
+        # Read CSVs
         consent_df = pd.read_csv(consent_path, sep="\t")
         symptoms_df = pd.read_csv(symptoms_path, sep="\t")
         pmd_df = pd.read_csv(pmd_path, sep="\t")
 
-        # Merge the two forms on subjid
-        merged_df = pd.merge(
-            symptoms_df, consent_df[["subjid", "brthdat__c"]], on="subjid", how="left"
+        # Merge DataFrames based on 'subjid'
+        merged_df = symptoms_df.merge(
+            consent_df[["subjid", "brthdat__c"]], on="subjid", how="left"
         )
+        merged_df = merged_df.merge(pmd_df[["subjid", "aao"]], on="subjid", how="left")
 
-        # Merge the 'pmd' form on subjid to get 'aao'
-        merged_df = pd.merge(
-            merged_df, pmd_df[["subjid", "aao"]], on="subjid", how="left"
-        )
+        # Processing date columns and computing 'aas' and 'aas_aao_diff'
+        for date_col in ["psstdat__c", "brthdat__c"]:
+            merged_df[date_col] = pd.to_datetime(merged_df[date_col], errors="coerce")
 
-        # Process date columns
-        process_datetime_column(merged_df, "psstdat__c")
-        process_datetime_column(merged_df, "brthdat__c")
-
-        # Calculate age at symptoms (AAS) in years
         merged_df["aas"] = (
-            pd.to_datetime(merged_df["psstdat__c"], errors="coerce")
-            - pd.to_datetime(merged_df["brthdat__c"], errors="coerce")
+            merged_df["psstdat__c"] - merged_df["brthdat__c"]
         ).dt.days / 365.25
-
-        # Calculate the difference between AAS and AAO for each patient
         merged_df["aas_aao_diff"] = merged_df["aao"] - merged_df["aas"]
 
-        # For each patient, select the top 5 symptoms with the lowest absolute values of 'aas_aao_diff'
+        # Get top 5 symptoms closest in time to onset
         top5_symptoms = (
-            merged_df.groupby("subjid", as_index=False)
-            .apply(lambda group: group.nsmallest(5, "aas_aao_diff"))
-            .reset_index(drop=True)
-        )
-
-        # Ensure that the selected symptoms are unique for each patient
-        top5_symptoms = (
-            top5_symptoms.groupby("subjid")["psterm__decod"]
+            merged_df.sort_values("aas_aao_diff", key=abs)
+            .groupby("subjid")
+            .head(5)
+            .groupby("subjid")["psterm__decod"]
             .apply(lambda x: x.tolist())
-            .reset_index(name="top5_symptoms")
+            .apply(lambda x: x + [None] * (5 - len(x)))  # Ensuring 5 entries
+            .reset_index()
         )
 
+        # print top5_symptoms
+        # print(f"Top 5 symptoms for {hospital_name}:")
+        # print(top5_symptoms)
+
+        # Convert to DataFrame and fill with NaN if less than 5 symptoms
         symptoms_df = pd.DataFrame(
-            top5_symptoms["top5_symptoms"].tolist(), index=top5_symptoms["subjid"]
-        ).fillna(0)
+            top5_symptoms["psterm__decod"].tolist(),
+            index=top5_symptoms["subjid"],
+            columns=top5_columns,
+        )
 
-        # Rename the columns to symp_on_n
-        symptoms_df.columns = top5_columns
+        # Store the DataFrame
+        all_symptoms_dfs.append(symptoms_df)
+        # print(f"Done processing symptoms for {hospital_name}")
 
-        # print('symphtoms_df of :', hospital_name)
-        # print(symptoms_df)
-        all_symptoms_dfs.append(symptoms_df)  # Store symptoms_df in the list
+    # Concatenate symptoms DataFrames and ensure unique rows
+    symptoms_df_global = pd.concat(all_symptoms_dfs, axis=0).drop_duplicates()
 
-        # print('all_symptoms_dfs: ', all_symptoms_dfs)
+    # print the symptoms_df_global
+    # print(f"symptoms_df_global: {symptoms_df_global}")
 
-        # print(f'done for {hospital_name}')
-
-    # Concatenate all symptoms_df DataFrames
-    symptoms_df_global = pd.concat(all_symptoms_dfs, axis=0)
-    symptoms_df_global.drop_duplicates(inplace=True)
-
-    df_preprocessed_global = pd.merge(
-        df_preprocessed_global,
-        symptoms_df_global[list(top5_columns)],
-        left_on="subjid",
-        right_index=True,
-        how="left",
+    # Merge with the global preprocessed DataFrame
+    df_preprocessed_global = df_preprocessed_global.merge(
+        symptoms_df_global, left_on="subjid", right_index=True, how="left"
     )
 
-    # Select only one row with the fewest missing values for each unique combination of 'Hospital', 'subjid', and 'visdat' if duplicates exist
-    duplicated_indices = df_preprocessed_global.duplicated(
-        subset=["Hospital", "subjid", "visdat"], keep=False
+    # print the new columns of the df_preprocessed_global
+    print(
+        f"Columns of the df_preprocessed_global after adding top5 symptoms: {df_preprocessed_global.columns}"
     )
-    df_preprocessed_global_duplicated = df_preprocessed_global[duplicated_indices]
-    df_preprocessed_global_unique = df_preprocessed_global[~duplicated_indices]
-    if not df_preprocessed_global_duplicated.empty:
-        print(df_preprocessed_global_duplicated)
-        # Keep only one row randomly
-        df_preprocessed_global_duplicated = (
-            df_preprocessed_global_duplicated.groupby(["Hospital", "subjid", "visdat"])
-            .apply(lambda x: x.sample(n=1))
-            .reset_index(drop=True)
+
+    # print the column
+
+    # Drop duplicate rows based on 'subjid' and 'visdat'
+    if df_preprocessed_global.duplicated(subset=["subjid", "visdat"]).any():
+        print("Handling duplicates...")
+        df_preprocessed_global = df_preprocessed_global.drop_duplicates(
+            subset=["subjid", "visdat"]
         )
-        df_preprocessed_global = pd.concat(
-            [df_preprocessed_global_unique, df_preprocessed_global_duplicated],
-            ignore_index=True,
-        )
-        print(df_preprocessed_global_duplicated)
+
+    """
+    # print distribution of the top5 symptoms
+    for col in top5_columns:
+        print(f"Distribution for column {col}:")
+        print(df_preprocessed_global[col].value_counts())
+        print("\n")
+    """
 
     return df_preprocessed_global
 
@@ -668,15 +753,11 @@ def update_encephalopathy_column(
 
 # function to add ebnormalities columns
 def add_abnormalities_cols(df, mapping_abnormalities_path, mapping_symptoms_path):
-    # Read the main DataFrame
-
-    # Read mapping_abnormalities_HPO.xlsx
+    # Load data from Excel files
     mapping_abnormalities = pd.read_excel(mapping_abnormalities_path, index_col=0)
-
-    # Read mapping_symptoms.xlsx
     mapping_symptoms = pd.read_excel(mapping_symptoms_path)
 
-    # Define the column mapping
+    # Column mapping for renaming columns in mapping_abnormalities
     column_mapping = {
         "Behavioral/psychiatric abnormality": "beh_psy_abn",
         "Cardiovascular system": "card_abn",
@@ -694,66 +775,42 @@ def add_abnormalities_cols(df, mapping_abnormalities_path, mapping_symptoms_path
         "Respiratory system": "resp_abn",
         "Connective tissue / skin": "conn_skin_abn",
     }
-
-    # Rename the columns
     mapping_abnormalities.rename(columns=column_mapping, inplace=True)
 
-    # Iterate over columns in mapping_abnormalities
+    # Create a dictionary mapping psterm__modify to Corresponding_psterm_decod
     if (
         "psterm__modify" in mapping_symptoms.columns
         and "Corresponding_psterm_decod" in mapping_symptoms.columns
     ):
-        # Create a dictionary mapping psterm__modify to Corresponding_psterm_decod
         modify_to_decod_mapping = mapping_symptoms.set_index("psterm__modify")[
             "Corresponding_psterm_decod"
         ].to_dict()
+        mapping_abnormalities.replace(modify_to_decod_mapping, inplace=True)
 
-        # Replace values in the column with Corresponding_psterm_decod
-        mapping_abnormalities = mapping_abnormalities.applymap(
-            lambda x: modify_to_decod_mapping.get(x, x)
-        )
+    # Prepare a dictionary to map symptoms to HPO codes
+    hpo_sets = {
+        col: set(mapping_abnormalities[col].dropna().astype(int).astype(str))
+        for col in mapping_abnormalities.columns
+    }
 
-    # Add new columns to df based on mapping_abnormalities
+    # Initialize new columns in the DataFrame
     for column in mapping_abnormalities.columns:
-        df[column] = None  # Initialize the new columns
+        df[column] = 0
 
-    subjid_list = df["subjid"].tolist()
-    patients_symptoms = []
+    # Iterate through rows and update abnormality columns
     for index, row in df.iterrows():
-        symptoms = set(
-            row[col]
+        # Get unique symptoms for the current row
+        symptoms = {
+            str(int(row[col]))
             for col in df.columns
             if "psterm__decod" in col and not pd.isna(row[col])
-        )
-        patients_symptoms.append(list(symptoms))
+        }
 
-    subjid_list = df["subjid"].tolist()
-    patients_symptoms_mapping = {}
-
-    for index, row in df.iterrows():
-        subjid = row["subjid"]
-        symptoms = set(
-            row[col]
-            for col in df.columns
-            if "psterm__decod" in col and not pd.isna(row[col])
-        )
-        patients_symptoms_mapping[subjid] = list(symptoms)
-
-    # Iterate through the list of symptoms and update mapping_abnormalities
-    # for index, symptoms in enumerate(patients_symptoms):
-    for subjid, symptoms in patients_symptoms_mapping.items():
-        for symptom in symptoms:
-            for col in mapping_abnormalities.columns:
-                hpo_values = mapping_abnormalities[col].values
-                hpo_values = hpo_values[~pd.isna(hpo_values)]
-
-                stripped_symptom = str(int(symptom))
-                stripped_hpo_values = [str(int(val)) for val in hpo_values]
-
-                index_of_subjid = df.loc[df["subjid"] == subjid].index[0]
-
-                if stripped_symptom in stripped_hpo_values:
-                    df.at[index_of_subjid, col] = 1
+        for col, hpo_values in hpo_sets.items():
+            if (
+                symptoms & hpo_values
+            ):  # Check if there is any intersection between symptoms and hpo_values
+                df.at[index, col] = 1
 
     # Print the distribution of each column in the final DataFrame
     for col in mapping_abnormalities.columns:

@@ -66,6 +66,7 @@ from config import (
     global_path,
     saved_result_path,
     saved_result_path_classification,
+    important_vars_path,
 )
 from utilities import *
 from plotting import *
@@ -600,21 +601,25 @@ def process_gendna_column(df):
         saved_result_path_classification, "patients_with_nan_or_1_gendna.csv"
     )
     patients_with_nan_gendna = df[df["gendna"].isnull()][["subjid", "Hospital"]]
-    #add to the patients_with_nan_gendna the patients where gendna is equal to 1
+    # add to the patients_with_nan_gendna the patients where gendna is equal to 1
     patients_with_1_gendna = df[df["gendna"] == 1][["subjid", "Hospital"]]
-    patients_with_nan_gendna = pd.concat([patients_with_nan_gendna, patients_with_1_gendna])
-    #create a df with the all the columns of these patients
+    patients_with_nan_gendna = pd.concat(
+        [patients_with_nan_gendna, patients_with_1_gendna]
+    )
+    # create a df with the all the columns of these patients
     patients_with_nan_gendna = df[df["subjid"].isin(patients_with_nan_gendna["subjid"])]
     patients_with_nan_gendna.to_csv(file_path, index=False)
-    #convert to numerical and save it patients_with_nan_gendna
+    # convert to numerical and save it patients_with_nan_gendna
     patients_with_nan_gendna = convert_to_numerical(patients_with_nan_gendna)
-    patients_with_nan_gendna.to_csv(os.path.join(
-        saved_result_path_classification, "patients_with_nan_or_1_gendna_num.csv"
-    ), index=False)
-    #print the dimension of the file
+    patients_with_nan_gendna.to_csv(
+        os.path.join(
+            saved_result_path_classification, "patients_with_nan_or_1_gendna_num.csv"
+        ),
+        index=False,
+    )
+    # print the dimension of the file
     print("Patients with NaN or 1 'gendna' information saved to:", file_path)
-    print("Dimension of the file:", patients_with_nan_gendna.shape) 
-
+    print("Dimension of the file:", patients_with_nan_gendna.shape)
 
     # Drop NaN values from 'gendna' column
     df_non_nan = df.dropna(subset=["gendna"])
@@ -622,10 +627,9 @@ def process_gendna_column(df):
     # Remove rows where 'gendna' is equal to 1
     df_non_nan = df_non_nan[df_non_nan["gendna"] != 1]
 
-    #print the number of rows removed and the new number of rows
+    # print the number of rows removed and the new number of rows
     print(f"Number of rows removed: {len(df) - len(df_non_nan)}")
     print(f"New number of rows: {len(df_non_nan)}")
-
 
     # Create 'nDNA' and 'mtDNA' classes
     df_non_nan["nDNA"] = df_non_nan["gendna"].apply(
@@ -648,6 +652,7 @@ def process_gendna_column(df):
     df_non_nan["gendna_type"] = df_non_nan["gendna_type"].replace(
         {"mtDNA": 0, "nDNA": 1}
     )
+
     plot_gendna_distribution(df_non_nan)
 
     # Convert DataFrame to numerical format
@@ -655,10 +660,11 @@ def process_gendna_column(df):
 
     print("\nDistribution of 'gendna_type' in the numerical DataFrame:")
     print(df_processed["gendna_type"].value_counts())
+    # print as percentage
+    print("\nDistribution of 'gendna_type' in the numerical DataFrame:")
+    print(df_processed["gendna_type"].value_counts(normalize=True) * 100)
 
     # Plot distribution of 'gendna_type'
-
-    print("Distribution of 'gendna_type' plotted.")
 
     return df_processed, df_non_nan
 
@@ -677,24 +683,12 @@ def define_X_y(df, columns_to_drop):
     """
     # Extract the target variable
     y = df["gendna_type"]
-    # y = df.pop("gendna_type")
-
-    # Load the important variables from Excel
-    important_vars_path = os.path.join(global_path, "data", "important_variables.xlsx")
-    df_vars = pd.read_excel(important_vars_path)
-
-    # Specify the column name for considering variables
-    column_name = "consider for mtDNA vs nDNA classification?"
-    print(df.columns)
 
     # Get the list of columns to drop based on 'N' in the specified column
     df.drop(columns=columns_to_drop, inplace=True)
 
-    # Assign the processed dataframe to X_df
-    X_df = df
-
     # Convert X_df to numpy array
-    X = X_df.values
+    X = df.values
 
     # Print the type and dimension of X and y
     print("\nType and Dimension of X:")
@@ -703,178 +697,106 @@ def define_X_y(df, columns_to_drop):
     print("\nType and Dimension of y:")
     print(type(y), y.shape)
 
-    return X, y, X_df
+    return X, y
 
 
 def fill_missing_values(df):
     # Load the important variables file
-    important_vars_path = os.path.join(global_path, "data", "important_variables.xlsx")
     df_vars = pd.read_excel(important_vars_path)
 
     # Print columns not in the important variables list
     missing_columns = [
         col for col in df.columns if col not in df_vars["variable"].values
     ]
-    # if missing_columns:
-    # print("Columns not in the important variables list:")
-    # for col in missing_columns:
-    # print(col)
-
     # Fill missing values based on the important variables list
     for index, row in df_vars.iterrows():
         column = row["variable"]
         na = row["NA"]
         if column in df.columns:
-            if na == "NA":
-                df[column].fillna(-1, inplace=True)
+            if na == "998":
+                df[column].fillna(998, inplace=True)
             # else:
             # df[column].fillna(998, inplace=True)
-
-    # Print the updated missing value counts
-    # print("Updated missing value counts:")
-    for column in df.columns:
-        if column in df_vars["variable"].values:
-            # print(f"{column}: {df[column].isnull().sum()}")
-            continue
-
     return df
 
 
-def experiment_definition(X, y, X_df, num_folds=5):
-    """
-    Define experiment parameters and split the data into train and test sets.
+def experiment_definition(X, y, X_df, saved_result_path_classification, num_folds=5):
+    # Paths to required files
+    test_subjects_path = os.path.join(
+        saved_result_path_classification, "saved_data/test_subjects_num.pkl"
+    )
+    kf_path = os.path.join(saved_result_path_classification, "kf.pkl")
 
-    Parameters:
-        X (array-like): Features.
-        y (array-like): Target variable.
-        num_folds (int): Number of folds for cross-validation.
-        nFeatures (int): Maximum number of features to select.
-        thr (float): Threshold to select top features based on importance.
+    # Load the previously saved test subject IDs from a pickle file
+    if not os.path.exists(test_subjects_path):
+        raise FileNotFoundError(
+            "Saved test subjects file is missing. Test subjects must be defined first."
+        )
 
-    Returns:
-        tuple: Train and test sets along with cross-validation iterator, scorer.
-    """
-    np.random.seed(42)
-    # check if the kf is already saved
-    if os.path.exists(os.path.join(saved_result_path_classification, "kf.pkl")):
-        kf = pd.read_pickle(os.path.join(saved_result_path_classification, "kf.pkl"))
-        print("kf", kf)
+    with open(test_subjects_path, "rb") as f:
+        test_subjects_ids = pickle.load(f)
+
+    # Load KFold object if it exists
+    if not os.path.exists(kf_path):
+        kf = KFold(
+            n_splits=num_folds, shuffle=True, random_state=42
+        )  # Default KFold setup if not previously saved
     else:
-        # Use KFold to split the shuffled indices into folds
-        kf = KFold(n_splits=num_folds, shuffle=True, random_state=42)
-        with open(os.path.join(saved_result_path_classification, "kf.pkl"), "wb") as f:
-            pickle.dump(kf, f)
-
-    # kf = KFold(n_splits=num_folds, shuffle=True, random_state=42)
-
-    # Split the data into training and test sets (80-20 split)
-    print("Splitting started")
-
-    subjid = X_df["subjid"]
-    # print("subjid", subjid)
-    # Resetting the index to ensure it's a fresh, clean index
-    X_df = X_df.reset_index(drop=True)
-    y = y.reset_index(drop=True)
-
-    X_train, X_test, y_train, y_test = train_test_split(
-        X_df, y, test_size=0.2, random_state=42, stratify=y
-    )
-
-    # X_train_df = pd.DataFrame(X_train, columns=X_df.columns)
-    # X_test_df = pd.DataFrame(X_test, columns=X_df.columns)
-
-    # Align y_test with X_test_df
-    y_test = y_test.reset_index(drop=True)
-
-    # Convert split arrays back to DataFrames
-    X_train_df = pd.DataFrame(X_train, columns=X_df.columns, index=X_train.index)
-    X_test_df = pd.DataFrame(X_test, columns=X_df.columns, index=X_test.index)
-
-    train_subjects = X_train_df["subjid"]
-    test_subjects = X_test_df["subjid"]
-
-    # Get the indices for the train and test sets
-    train_indices = X_train_df.index
-    test_indices = X_test_df.index
-
-    print("train_indices", train_indices)
-    print("len train indeces", len(train_indices))
-    print("test_indices", test_indices)
-
-    # Verification
-    consistent_order = (test_subjects.index == y_test.index).all()
-    print(
-        f"Is the order of 'subjid' in X_test_df the same as 'y_test'? {consistent_order}"
-    )
-    print("Test Subjects in X_test_df:")
-    print(test_subjects.values)
-
-    print("Corresponding y_test values:")
-    print(y_test.values)
-
-    # print len of train and test subjects and their values
-    print("len of train subjects", len(train_subjects))
-    print("len of test subjects", len(test_subjects))
-    # Print the subjid to check which patients are in the training and test sets
-    print("Training set subjects:\n", train_subjects)
-    print("Test set subjects:\n", test_subjects)
-
-    # print len unique train and test subjects
-    print("LEn Unique test subjects", len(test_subjects.unique()))
-    print("LEn Unique train subjects", len(train_subjects.unique()))
-
-    # time.pause(70)
-
-    # Drop the subjid column from X_train and X_test if no longer needed
-    X_train = X_train_df.drop(columns=["subjid"]).values
-    X_test = X_test_df.drop(columns=["subjid"]).values
-
-    # check the type of X_train and X_test
-    print("Type of X_train", type(X_train))
-    print("Type of X_test", type(X_test))
-
-    # print size of X_train and X_test that are arrays
-    print("X_train size", X_train.shape)
-    print("X_test size", X_test.shape)
-
-    print("Splitting completed")
+        with open(kf_path, "rb") as f:
+            kf = pickle.load(f)
 
     # Create a scorer for F1 score
     scorer = make_scorer(f1_score, average="weighted")
 
+    # Define additional parameters for feature selection
     nFeatures = 15  # Maximum number of features to select
-    thr = 0.25  # threshold to select top 25% features
-    num_folds = 5  # for mrmr
+    thr = 0.25  # Threshold to select top 25% features
 
-    # Save classifier configuration to a file
-    config_file = saved_result_path_classification + "/classifier_configuration.pkl"
+    # Use train_test_split to derive train/test indices based on previously saved test_subject_ids
+    test_indices = X_df[X_df["subjid"].isin(test_subjects_ids)].index
+    train_indices = X_df.index.difference(test_indices)
+
+    X_train_df = X_df.loc[train_indices]
+    X_test_df = X_df.loc[test_indices]
+    y_train = y.loc[train_indices]
+    y_test = y.loc[test_indices]
+
+    # Prepare a dictionary to hold the classifier configuration
     classifier_config = {
         "kf": kf,
         "scorer": scorer,
-        "X_test": X_test,
-        "y_test": y_test,
-        "X_train": X_train,
-        "y_train": y_train,
+        "X_test": X_test_df.drop(columns=["subjid"]).values,
+        "y_test": y_test.values,
+        "X_train": X_train_df.drop(columns=["subjid"]).values,
+        "y_train": y_train.values,
         "num_folds": num_folds,
         "nFeatures": nFeatures,
         "thr": thr,
-        "num_folds": num_folds,
-        "train_subjects": train_subjects,
-        "test_subjects": test_subjects,
+        "train_subjects": X_train_df["subjid"].values,
+        "test_subjects": X_test_df["subjid"].values,
         "train_indices": train_indices,
         "test_indices": test_indices,
     }
-    # with open(config_file, "wb") as f:
-    # pickle.dump(classifier_config, f)
-    # print(f"Classifier configuration saved to {config_file}")
 
+    # Ensure the directory exists where configurations will be saved
+    os.makedirs(saved_result_path_classification, exist_ok=True)
+
+    # Save the classifier configuration
+    config_file = os.path.join(
+        saved_result_path_classification, "classifier_configuration.pkl"
+    )
+    with open(config_file, "wb") as f:
+        pickle.dump(classifier_config, f)
+        print(f"Classifier configuration saved to {config_file}")
+
+    # Return the relevant variables
     return (
-        X_train,
-        X_test,
-        y_train,
-        y_test,
-        train_subjects,
-        test_subjects,
+        classifier_config["X_train"],
+        classifier_config["X_test"],
+        classifier_config["y_train"],
+        classifier_config["y_test"],
+        classifier_config["train_subjects"],
+        classifier_config["test_subjects"],
         kf,
         scorer,
         thr,

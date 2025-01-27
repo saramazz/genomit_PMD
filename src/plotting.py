@@ -22,7 +22,7 @@ PLOT PREPROCESSING
 """
 
 
-def plot_missing_values(df, hospital_name, saved_result_path):
+def plot_missing_values(df, saved_result_path):
     missing_values = df.isnull().sum()
     total_values = len(df)
     missing_percentages = (missing_values / total_values) * 100
@@ -39,8 +39,10 @@ def plot_missing_values(df, hospital_name, saved_result_path):
     # Decrease the font size on the y-axis
     plt.yticks(fontsize=10)
     plt.grid()
-    my_file = "Histogram_MissingValues_" + hospital_name + ".png"
+    my_file = "Histogram_MissingValues_df_Global.png"
     plt.savefig(os.path.join(saved_result_path, my_file), bbox_inches="tight")
+    # print that has been saved in the path
+    print(f"Missing values plot saved in {saved_result_path}")
     # plt.show()
     plt.close()
 
@@ -76,86 +78,6 @@ def plot_phenotype_distribution(df, phenotype_column, saved_result_path):
     # plt.show()
 
 
-# do not consider psterm__decod_ and pimgtype
-def plot_missing_values_reduced(df, hospital_name):
-    # Exclude columns with specific names
-    excluded_columns = [
-        col
-        for col in df.columns
-        if "psterm__decod_" in col or "pimgtype_" in col or "symp" in col
-    ]
-    df_filtered = df.drop(excluded_columns, axis=1)
-
-    missing_values = df_filtered.isnull().sum()
-    total_values = len(df)
-    missing_percentages = (missing_values / total_values) * 100
-    missing_data = pd.DataFrame(
-        {"Missing Values": missing_values, "Missing Percentage": missing_percentages}
-    )
-    missing_data = missing_data.sort_values(by="Missing Values", ascending=False)
-
-    plt.figure(figsize=(12, 18))
-    plt.barh(missing_data.index, missing_data["Missing Values"], color="lightcoral")
-    plt.xlabel("Number of Missing Values")
-    plt.ylabel("Variable Name")
-    plt.title("Missing Values for Each Variable")
-    plt.gca().invert_yaxis()
-    # Decrease the font size on the y-axis
-    plt.yticks(fontsize=10)
-    plt.grid()
-
-    my_file = "Histogram_MissingValues_Reduced_" + hospital_name + ".png"
-    plt.savefig(os.path.join(saved_result_path, my_file), bbox_inches="tight")
-    # plt.show()
-    plt.close()
-
-
-def plot_missing_values_diff(
-    df, hospital_name, saved_result_path
-):  # difference between IT presence or absence
-    # Calculate the percentage of missing values for each column in the entire dataframe
-    total_missing_percentage = df.isnull().mean() * 100
-
-    # Filter the dataframe to include only non-IT subjects
-    non_it_df = df[~df["subjid"].str.contains("IT", case=False, na=False)]
-    # print(non_it_df.shape)
-
-    # Calculate the percentage of missing values for each column in the subset
-    non_it_missing_percentage = non_it_df.isnull().mean() * 100
-
-    # Combine the two percentages into a new DataFrame
-    missing_percentage_df = pd.DataFrame(
-        {
-            "Total Missing Percentage": total_missing_percentage,
-            "Non-IT Missing Percentage": non_it_missing_percentage,
-        }
-    )
-    # print(missing_percentage_df)
-
-    # Sort the DataFrame by total missing percentage for better visualization
-    missing_percentage_df = missing_percentage_df.sort_values(
-        by="Total Missing Percentage", ascending=False
-    )
-
-    # Plotting
-    plt.figure(figsize=(100, 8))  # Increased width
-    ax = missing_percentage_df.plot(
-        kind="bar", width=0.8, edgecolor="k"
-    )  # , colormap='viridis')
-
-    # Decrease font size of x-axis text
-    ax.tick_params(axis="x", labelrotation=90, labelsize=4)
-
-    plt.title("Missing Values Comparison: Entire DF vs Non-IT Subjects")
-    plt.ylabel("Percentage of Missing Values")
-    plt.xlabel("Columns")
-    plt.legend(loc="upper right")
-    plt.tight_layout()
-
-    my_file = "Histogram_MissingValues_Reduced_diff" + hospital_name + ".png"
-    plt.savefig(os.path.join(saved_result_path, my_file), bbox_inches="tight")
-    plt.close()
-    # print('Diff hist missing values plotted')
 
 
 def plot_histogram_visits_per_patient(df, hospital_name, saved_result_path):
@@ -227,6 +149,7 @@ def plot_gendna_distribution(df):
     plt.savefig(
         os.path.join(saved_result_path_classification, my_file), bbox_inches="tight"
     )
+    print(f"gendna distribution plot saved in {os.path.join(saved_result_path_classification, my_file)}")
     plt.close()
 
 

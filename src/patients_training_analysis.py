@@ -27,7 +27,7 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 from scipy.stats import mode
 import shap
-
+import re
 
 # Analyis patients gendna and variables missing in the db and in htem
 
@@ -44,7 +44,7 @@ current_datetime = datetime.now().strftime("%Y%m%d_%H%M%S")
 """
 # Load Global DataFrame with only first visit data
 hospital_name = "Global"
-df_path = os.path.join(saved_result_path, "df", "df_preprocessed_Global.pkl")
+df_path = os.path.join(saved_result_path, "df", "df_Global_preprocessed.pkl")
 
 df = pd.read_pickle(df_path)
 
@@ -60,21 +60,110 @@ print(
 # Define experiment parameters and split the data saving in a pickle file IMPORTING FROM THE PREVIOUS SCRIPT
 config_path = os.path.join(
     saved_result_path,
-    "classifiers_results/experiments_all_models/classifier_configuration.pkl",
+    "classifiers_results/old/experiments_all_models/classifier_configuration.pkl",
 )
 config_dict = pd.read_pickle(config_path)
 
 test_subjects = config_dict["test_subjects"]
+#print the test_subjects and their dimension
+#print the saved_result_path_classification
+print("Saved result path classification:", saved_result_path_classification)
+print("Test subjects:", test_subjects)
+print("Dimension test subjects:", len(test_subjects))
+#save the test_subjects to a file
+save_variable(test_subjects, "test_subjects_179", os.path.join(saved_result_path_classification,"saved_data"))
+
+'''
+test_subjects_set = set(test_subjects)
+df_subjid_set = set(df["subjid"].values)
+
+# Find common subjects
+common_subjects = test_subjects_set.intersection(df_subjid_set)
+
+# Identify test subjects not in the DataFrame
+missing_subjects = test_subjects_set - df_subjid_set
+
+# Print results
+print("Number of test subjects in DataFrame:", len(common_subjects))
+print("Test subjects in the DataFrame:", common_subjects)
+
+print("Number of test subjects not in DataFrame:", len(missing_subjects))
+print("Test subjects not in the DataFrame:", missing_subjects)
+'''
+
+
+# Extract numeric parts from test_subjects with fallback
+def extract_alphanumeric_prefix(subjects):
+    extracted_prefixes = []
+    for subjid in subjects:
+        match = re.match(r"([A-Za-z0-9-]+)", str(subjid))  # Ensure subjid is string
+        if match:
+            extracted_prefixes.append(match.group(1))
+        else:
+            print(f"Warning: Could not extract prefix from '{subjid}'")
+    return extracted_prefixes
+
+#print type of test_subjects
+print("Type test subjects:", type(test_subjects))
+# Extract prefixes for test_subjects and the subjid column of df
+test_subjects_numeric = extract_alphanumeric_prefix(test_subjects)
+df_subjid_numeric = extract_alphanumeric_prefix(df["subjid"].values)
+
+# Print the results for test subjects
+#print("Test subjects numeric:", test_subjects_numeric)
+print("Dimension test subjects numeric:", len(test_subjects_numeric))
+
+# Print the results for the DataFrame subjid
+#print("df subjid numeric:", df_subjid_numeric)
+print("Dimension df subjid numeric:", len(df_subjid_numeric))
+
+
+test_subjects_set = set(test_subjects_numeric)
+df_subjid_set = set(df_subjid_numeric)
+
+# Find common subjects
+common_subjects = test_subjects_set.intersection(df_subjid_set)
+#save the test_subjects_numeric to a file
+save_variable(list(common_subjects), "test_subjects_num", os.path.join(saved_result_path_classification,"saved_data"))
+
+#print the common_subjects
+print("Common subjects:", list(common_subjects))
+#print len of common_subjects
+print("Dimension common subjects:", len(common_subjects))
+
+
+# Identify test subjects not in the DataFrame
+missing_subjects = test_subjects_set - df_subjid_set
+
+# Print results
+print("Number of test subjects in DataFrame:", len(common_subjects))
+print("Test subjects in the DataFrame:", common_subjects)
+
+print("Number of test subjects not in DataFrame:", len(missing_subjects))
+print("Test subjects not in the DataFrame:", missing_subjects)
+
+
+input("Press Enter to continue...")
 
 
 # print test subjects
 print("Test subjects:", test_subjects)
+# consider training subjects the one not in the test_subjects
+train_subjects = df[~df["subjid"].isin(test_subjects)]["subjid"].unique()
+
+# print dimension of train and test subjects
+print("Train subjects:", len(train_subjects))
+print("Test subjects:", len(test_subjects))
+
+
 X_train = config_dict["X_train"]
 X_test = config_dict["X_test"]
 
 # print dimension of X_train and X_test
 print("X_train shape:", X_train.shape)
 print("X_test shape:", X_test.shape)
+
+# input("Press Enter to continue...")
 
 # Load the important variables from config
 kf = config_dict["kf"]
@@ -236,12 +325,19 @@ def plot_missing_comparison(missing_comparison, save_path):
 # Plot the grouped bar chart
 plot_missing_comparison(missing_comparison, saved_result_path_classification)
 
-#print the df_missing_percent
-#sort the missing_comparison by df_missing_percent
-missing_comparison = missing_comparison.sort_values(by="df_missing_percent", ascending=False)
+# print the df_missing_percent
+# sort the missing_comparison by df_missing_percent
+missing_comparison = missing_comparison.sort_values(
+    by="df_missing_percent", ascending=False
+)
 print(missing_comparison["df_missing_percent"])
-#save missing_comparison["df_missing_percent"] to a file
-missing_comparison["df_missing_percent"].to_csv(os.path.join(saved_result_path_classification, "missing_comparison_df_missing_percent.csv"))
+# save missing_comparison["df_missing_percent"] to a file
+missing_comparison["df_missing_percent"].to_csv(
+    os.path.join(
+        saved_result_path_classification, "missing_comparison_df_missing_percent.csv"
+    )
+)
+
 
 # print the distribution of missing values in the full data and in the train+ test set and in the patient excluded
 # Create a grouped bar plot for missing values

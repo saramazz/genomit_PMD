@@ -38,7 +38,8 @@ from sklearn.pipeline import Pipeline
 from sklearn.svm import SVC
 from sklearn.feature_selection import SequentialFeatureSelector
 from xgboost import XGBClassifier
-from catboost import CatBoostClassifier
+
+# from catboost import CatBoostClassifier
 from scipy.stats import mode
 import shap
 from imblearn.over_sampling import SMOTE
@@ -48,20 +49,29 @@ from sklearn.tree import DecisionTreeClassifier
 
 ### Locally defined modules:
 
-from config import global_path, saved_result_path_classification
+from config import global_path, saved_result_path_classification, important_vars_path
 from utilities import *
 from processing import *
 from plotting import *
+
+# import datetime
+from datetime import datetime
 
 """
 IMPORT DATA
 """
 
 # Load Global DataFrame with only first visit data
-hospital_name = "Global"
-df_path = os.path.join(saved_result_path, "df", "df_preprocessed_Global.pkl")
+df_path = os.path.join(saved_result_path, "df", "df_Global_preprocessed.csv")
+saved_result_path_classification = os.path.join(
+    saved_result_path_classification, "experiments_all_models"
+)
+# create folder if not exists
+if not os.path.exists(saved_result_path_classification):
+    os.makedirs(saved_result_path_classification)
 
-df = pd.read_pickle(df_path)
+if os.path.exists(df_path):
+    df = pd.read_csv(df_path)
 
 
 # TODO: reduce the df
@@ -69,26 +79,23 @@ df = pd.read_pickle(df_path)
 
 # Display the dimensions and columns of the DataFrame
 nRow, nCol = df.shape
-print(
-    f'The DataFrame "df_preprocessed" from {hospital_name} hospital contains {nRow} rows and {nCol} columns.'
-)
-# print('Columns:', df.columns)
+print(f'The DataFrame "df_preprocessed" contains {nRow} rows and {nCol} columns.')
+print("Columns:", df.columns)
 
 # print distribution of classes, drop nans and 1, convert to numerical and print class distribution
 df, df_not_numerical = process_gendna_column(df)
-time.sleep(70)
 
 # insert Not applicable as -1
 df = fill_missing_values(df)
 
 print(df)
 
+
 """
 FEATURE SELECTION
 """
 
 # Load the important variables from Excel
-important_vars_path = os.path.join(global_path, "data", "important_variables.xlsx")
 df_vars = pd.read_excel(important_vars_path)
 
 # Specify the column name for considering variables
@@ -118,12 +125,14 @@ print("Columns to drop:", columns_to_drop)
 
 
 # Sostituisci i valori mancanti con 998
-df = df.fillna(998)
+# df = df.fillna(998)
 df_raw = df.copy()  # save the raw data non numerical
 
-# Drop the columns from the DataFrame and convert to numerical
-X, y, X_df = define_X_y(df, columns_to_drop)
+# Drop the columns from the DataFrame
+X, y = define_X_y(df, columns_to_drop)
 
+"""
+UPDATE FROM HERE
 
 # Define experiment parameters and split the data saving in
 (
@@ -138,23 +147,28 @@ X, y, X_df = define_X_y(df, columns_to_drop)
     thr,
     nFeatures,
     num_folds,
-) = experiment_definition(X, y, X_df)
+) = experiment_definition(X, y, df)
 
-time.pause(70)
+results = experiment_definition(X, y, df)
+
+"""
+
 
 # remove subjid from X_df
-X_df = X_df.drop(columns=["subjid"])
-features = X_df.columns
+df = df.drop(columns=["subjid"])
+features = df.columns
 
 # convert X to df
 # features=pd.DataFrame(X).columns
 
 print("Features names:", features)
-print("X_df shape:", X_df.shape)
+print("X_df shape:", df.shape)
 
 
 print("X_train shape:", X_train.shape)
 print("X_test shape:", X_test.shape)
+
+input("Press Enter to continue...")
 
 time.sleep(10)
 # paremeter for feature selection
@@ -174,6 +188,8 @@ sys.stdout = open(os.path.join(saved_result_path_classification, file_name), "w"
 
 # sys.stdout = open(os.path.join(saved_result_path_classification, "classification_reports_2703.txt"), 'w')
 print("Starting the classification...")
+
+input("Press Enter to continue...")
 
 """
 classifiers

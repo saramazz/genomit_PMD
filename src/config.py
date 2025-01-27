@@ -23,6 +23,11 @@ script_directory = os.path.dirname(os.path.abspath(__file__))
 global_path = os.path.dirname(script_directory)
 print("Global path:", global_path)
 
+important_vars_path = os.path.join(
+    global_path, "variables_mapping/important_variables.xlsx"
+)
+
+
 # Define the path for saved results folder
 saved_result_path = os.path.join(
     global_path, "saved_results"

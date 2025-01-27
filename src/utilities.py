@@ -3,14 +3,14 @@ import os
 import pickle
 
 def save_variable(variable, name, save_path):
-    final_name = os.path.join(save_path, name + ".pickle")
+    final_name = os.path.join(save_path, name + ".pkl")
     with open(final_name, "wb") as f:
         pickle.dump(variable, f, pickle.HIGHEST_PROTOCOL)
 
 
 # Function to load a pickle variable
 def load_pickle_variable(name, load_path):
-    file_path = os.path.join(load_path, name + ".pickle")
+    file_path = os.path.join(load_path, name + ".pkl")
     with open(file_path, "rb") as file:
         variable = pickle.load(file)
     return variable
