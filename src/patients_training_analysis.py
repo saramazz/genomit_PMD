@@ -107,7 +107,7 @@ def extract_alphanumeric_prefix(subjects):
 print("Type test subjects:", type(test_subjects))
 # Extract prefixes for test_subjects and the subjid column of df
 test_subjects_numeric = extract_alphanumeric_prefix(test_subjects)
-df_subjid_numeric = extract_alphanumeric_prefix(df["subjid"].values)
+df_subjid_numeric = df["subjid"].values#extract_alphanumeric_prefix(df["subjid"].values)
 
 # Print the results for test subjects
 #print("Test subjects numeric:", test_subjects_numeric)

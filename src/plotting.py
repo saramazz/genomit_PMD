@@ -12,6 +12,13 @@ from utilities import *
 from processing import *
 from plotting import *
 
+#import confusion matrix
+from sklearn.metrics import confusion_matrix
+#import seaborn
+import seaborn as sns
+import matplotlib.pyplot as plt
+import shap
+
 
 """
 Functions to plot for preprocessing and classification
@@ -76,8 +83,6 @@ def plot_phenotype_distribution(df, phenotype_column, saved_result_path):
 
     # Show the plot
     # plt.show()
-
-
 
 
 def plot_histogram_visits_per_patient(df, hospital_name, saved_result_path):
@@ -149,7 +154,9 @@ def plot_gendna_distribution(df):
     plt.savefig(
         os.path.join(saved_result_path_classification, my_file), bbox_inches="tight"
     )
-    print(f"gendna distribution plot saved in {os.path.join(saved_result_path_classification, my_file)}")
+    print(
+        f"gendna distribution plot saved in {os.path.join(saved_result_path_classification, my_file)}"
+    )
     plt.close()
 
 
@@ -207,123 +214,69 @@ def plot_clindiag_histogram(df_global):
     """
 
 
-# Function to plot the feature importance
-def plot_top_feature_importance(importances, names, model_type, save_path, top_n=10):
-    # Create arrays from feature importance and feature names
-    feature_importance = np.array(importances)
-    feature_names = np.array(names)
-
-    print(len(feature_importance))
-    print(len(feature_names))
-
-    # Create a DataFrame using a Dictionary
-    data = {"feature_names": feature_names, "feature_importance": feature_importance}
-    fi_df = pd.DataFrame(data)
-
-    # Sort the DataFrame in order decreasing feature importance
-    fi_df.sort_values(by=["feature_importance"], ascending=False, inplace=True)
-
-    # Select the top N features
-    fi_df = fi_df.head(top_n)
-
-    # Define the size of the bar plot
-    plt.figure(figsize=(10, 8))
-
-    # Plot Seaborn bar chart
-    sns.barplot(x=fi_df["feature_importance"], y=fi_df["feature_names"])
-    # sns.set(font_scale=2)
-
-    # Add chart labels
-    plt.xlabel("FEATURE IMPORTANCE")
-    plt.ylabel("FEATURE NAMES")
-    plt.title(f"Top {top_n} Features - {model_type}")
-
-    # Save the plot
-    my_file = f"Top_{top_n}_Feature_importance_{model_type}.png"
-    plt.savefig(
-        os.path.join(saved_result_path_classification, my_file), bbox_inches="tight"
-    )
-
-
-def precision_recall_plot(gt, pp, title, file_name, global_path):
-    # Set the font sizes for various parts of the plot
-    params = {
-        "legend.fontsize": "x-large",
-        "figure.figsize": (15, 5),
-        "axes.labelsize": "x-large",
-        "axes.titlesize": "x-large",
-        "xtick.labelsize": "x-large",
-        "ytick.labelsize": "x-large",
-    }
-    plt.rcParams.update(params)
-
-    # Calculate precision and recall
-    probs_rf1 = pp[:, 1]
-    probs_rf0 = pp[:, 0]
-    precision_rf1, recall_rf1, _ = precision_recall_curve(gt, probs_rf1)
-    ap_rf1 = average_precision_score(gt, probs_rf1)
-    precision_rf0, recall_rf0, _ = precision_recall_curve(1 - gt, probs_rf0)
-    ap_rf0 = average_precision_score(1 - gt, probs_rf0)
-
-    # Create the plot
-    plt.figure(figsize=(12, 7))
-    plt.plot(recall_rf1, precision_rf1, label=f"AP (0) = {ap_rf1:.2f}")
-    plt.plot(recall_rf0, precision_rf0, label=f"AP (1) = {ap_rf0:.2f}")
-    # plt.title(title, size=27)
-    plt.xlabel("Recall", size=30)
-    plt.ylabel("Precision", size=30)
-    plt.legend(loc="best")
-
-    # Save the plot
-    my_file = file_name + ".png"
-    saved_result_path_classification = os.path.join(global_path, "saved_results")
-    plt.savefig(
-        os.path.join(saved_result_path_classification, my_file),
-        format="png",
-        bbox_inches="tight",
-    )
-
-
 def plot_confusion_matrix(y_true, y_pred, file_name):
-    # Confusion matrix
-    # conf_mat = metrics.confusion_matrix(y_true, y_pred)
     conf_mat = confusion_matrix(y_true, y_pred)
-
-    # Define class labels
     class_labels = ["mtDNA", "nDNA"]
-    # df_non_nan['gendna_type'] = df_non_nan['gendna_type'].replace({'mtDNA': 0, 'nDNA': 1})
-
-    # Plot confusion matrix
-    confusion_matrix_plot(conf_mat, class_labels, file_name)
-
-
-def confusion_matrix_plot(conf_mat, class_labels, file_name):
-    group_names = ["True Neg", "False Pos", "False Neg", "True Pos"]
-    group_counts = ["{0:0.0f}".format(value) for value in conf_mat.flatten()]
-    labels = [f"{v1}\n{v2}" for v1, v2 in zip(group_names, group_counts)]
-    labels = np.asarray(labels).reshape(2, 2)
+    group_names = ["TN", "FP", "FN", "TP"]
+    group_counts = [f"{value:0.0f}" for value in conf_mat.flatten()]
+    labels = np.asarray(
+        [f"{v1}\n{v2}" for v1, v2 in zip(group_names, group_counts)]
+    ).reshape(2, 2)
 
     sns_plot = sns.heatmap(
         conf_mat, annot=labels, fmt="", cmap="Blues", annot_kws={"size": 18}
     )
-
-    # Set x and y axis labels
     plt.xlabel("Predicted Label")
     plt.ylabel("True Label")
-
-    # Set x and y axis ticks
     plt.xticks(ticks=[0.5, 1.5], labels=class_labels)
     plt.yticks(ticks=[0.5, 1.5], labels=class_labels)
-
-    # Set title
-    # plt.title(title)
-
     figure = plt.gcf()
     figure.set_size_inches(7, 6)
 
-    my_file = file_name + ".png"
     plt.savefig(
-        os.path.join(saved_result_path_classification, my_file),
+        os.path.join(saved_result_path_classification, f"{file_name}.png"),
+        format="png",
+        bbox_inches="tight",
+    )
+    plt.close()
+
+
+def plot_top_feature_importance(importances, names, model_type, save_path, top_n=10):
+    feature_importance = np.array(importances)
+    feature_names = np.array(names)
+
+    data = {"feature_names": feature_names, "feature_importance": feature_importance}
+    fi_df = (
+        pd.DataFrame(data)
+        .sort_values(by="feature_importance", ascending=False)
+        .head(top_n)
+    )
+
+    plt.figure(figsize=(10, 8))
+    sns.barplot(x="feature_importance", y="feature_names", data=fi_df)
+    plt.xlabel("FEATURE IMPORTANCE")
+    plt.ylabel("FEATURE NAMES")
+    plt.title(f"Top {top_n} Features - {model_type}")
+
+    my_file = f"Top_{top_n}_Feature_importance_{model_type}.png"
+    plt.savefig(os.path.join(save_path, my_file), bbox_inches="tight")
+    plt.close()
+
+
+def plot_shap_values(
+    estimator,
+    X,
+    results_path,
+    model_name,
+    feature_selection_option,
+    balancing_technique,
+):
+    explainer = shap.Explainer(estimator, X)
+    shap_values = explainer(X)
+    shap.plots.bar(shap_values)
+    shap_bar_plot_file = f"shap_bar_plot_{model_name}_{feature_selection_option}_{balancing_technique}.png"
+    plt.savefig(
+        os.path.join(results_path, shap_bar_plot_file),
         format="png",
         bbox_inches="tight",
     )

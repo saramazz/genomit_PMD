@@ -20,6 +20,10 @@ from imblearn.under_sampling import RandomUnderSampler
 from imblearn.combine import SMOTEENN
 from imblearn.ensemble import BalancedRandomForestClassifier
 
+from sklearn.ensemble import RandomForestClassifier  # For Random Forest
+from sklearn.tree import DecisionTreeClassifier  # For Decision Tree
+from sklearn.svm import SVC  # For Support Vector Machines (SVM)
+
 # Scikit-learn library imports
 from sklearn.model_selection import (
     train_test_split,
@@ -72,415 +76,9 @@ from utilities import *
 from plotting import *
 from preprocessing import *
 
+#import PCA
+from sklearn.decomposition import PCA
 
-def classification_results_80_20(X, y, classifier_name, clf, param_grid):
-    prediction = []
-    gt = []
-    proba = []
-
-    scaler = StandardScaler()
-    # fold = 0
-    f1_scores = []
-
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.2, random_state=42
-    )  # 20%test size
-
-    X_train = scaler.fit_transform(X_train)
-    X_test = scaler.transform(X_test)
-
-    # Perform grid search
-    grid_search = GridSearchCV(
-        estimator=clf, param_grid=param_grid, scoring="f1", cv=5, n_jobs=-1
-    )
-    grid_search.fit(X_train, y_train)
-
-    # Use the best estimator from grid search
-    clf = grid_search.best_estimator_
-    importances = grid_search.best_estimator_.feature_importances_
-
-    # Fit the model and make predictions
-    clf.fit(X_train, y_train)
-    res = clf.predict(X_test)
-    pr = clf.predict_proba(X_test)
-
-    prediction.append(res)  # save
-    gt.append(y_test)  # calc cm su y_test e pr
-    proba.append(pr)
-
-    # confusion matrix for each fold!
-    conf_mat = metrics.confusion_matrix(y_test, res)  # y_test, X test and SAVE IT
-    confusion_matrix_plot(
-        conf_mat,
-        f"Confusion Matrix - {classifier_name} Classification - ",
-        f"CM_{classifier_name}_",
-    )  # Confusion matrix and name to save  confusion matrix
-    plt.close()
-
-    best_pars = grid_search.best_params_
-    print(best_pars)
-
-    fold_f1_score = f1_score(y_test, res)
-    f1_scores.append(fold_f1_score)  # Store f1_score for this fold
-
-    gt = np.hstack(gt)
-    prediction = np.hstack(prediction)
-    pp = np.vstack(proba)
-
-    scoring = {
-        "accuracy": make_scorer(accuracy_score),
-        "precision": make_scorer(precision_score),
-        "recall": make_scorer(recall_score),
-        "f1_score": make_scorer(f1_score),
-    }
-
-    results = {
-        "test_accuracy": [accuracy_score(y_test, res)],
-        "test_precision": [precision_score(y_test, res)],
-        "test_recall": [recall_score(y_test, res)],
-        "test_f1_score": [f1_score(y_test, res)],
-    }
-
-    # save_variable(results, name + '_results')
-    # save_variable([gt, prediction, pp, X_train, X_test, y_train, y_test, clf, results, f1_scores], name)  # Save variables
-    clf_performances(results, f1_scores, classifier_name)  # Print performances
-    return [
-        gt,
-        prediction,
-        pp,
-        X_train,
-        X_test,
-        y_train,
-        y_test,
-        grid_search,
-        results,
-        f1_scores,
-        importances,
-    ]
-
-
-def classification_results_10cv(X, y, name, clf, param_grid):
-    prediction = []
-    gt = []
-    proba = []
-
-    scaler = StandardScaler()
-    fold = 0
-    f1_scores = []
-
-    # Perform 10-fold cross-validation
-    skf = StratifiedKFold(n_splits=10, shuffle=True, random_state=42)
-
-    for train_index, test_index in skf.split(X, y):
-        fold += 1
-        print(f"Fold: {fold}")
-
-        X_train, X_test = X[train_index], X[test_index]
-        y_train, y_test = y[train_index], y[test_index]
-
-        X_train = scaler.fit_transform(X_train)
-        X_test = scaler.transform(X_test)
-
-        # Perform grid search on each fold
-        grid_search = GridSearchCV(
-            estimator=clf, param_grid=param_grid, scoring="f1", cv=5, n_jobs=-1
-        )
-        grid_search.fit(X_train, y_train)
-
-        # Use the best estimator from grid search
-        clf = grid_search.best_estimator_
-
-        # Fit the model and make predictions
-        clf.fit(X_train, y_train)
-        res = clf.predict(X_test)
-        pr = clf.predict_proba(X_test)
-
-        prediction.append(res)
-        gt.append(y_test)
-        proba.append(pr)
-
-        # Confusion matrix for each fold
-        conf_mat = metrics.confusion_matrix(y_test, res)
-        confusion_matrix_plot(
-            conf_mat,
-            f"Confusion Matrix - {name} Classification - Fold: {fold}",
-            f"CM_{name}_fold_{fold}",
-        )
-        plt.close()
-
-        best_pars = grid_search.best_params_
-        print(best_pars)
-
-        fold_f1_score = f1_score(y_test, res)
-        f1_scores.append(fold_f1_score)
-
-    gt = np.hstack(gt)
-    prediction = np.hstack(prediction)
-    pp = np.vstack(proba)
-
-    scoring = {
-        "accuracy": make_scorer(accuracy_score),
-        "precision": make_scorer(precision_score),
-        "recall": make_scorer(recall_score),
-        "f1_score": make_scorer(f1_score),
-    }
-
-    # Use the best estimator from the last fold for overall evaluation
-    overall_clf = grid_search.best_estimator_
-
-    results = model_selection.cross_validate(
-        estimator=overall_clf, X=X, y=y, cv=skf, scoring=scoring
-    )
-
-    clf_performances(results, f1_scores, name)
-    return [
-        gt,
-        prediction,
-        pp,
-        X_train,
-        X_test,
-        y_train,
-        y_test,
-        overall_clf,
-        results,
-        f1_scores,
-    ]
-
-
-def clf_performances(results, f1_scores, name):
-    median_scores = {
-        "Accuracy": np.median(results["test_accuracy"]),
-        "Precision": np.median(results["test_precision"]),
-        "F1 Score": np.median(f1_scores),
-    }
-
-    q1_scores = {
-        "Accuracy": np.percentile(results["test_accuracy"], 25),
-        "Precision": np.percentile(results["test_precision"], 25),
-        "F1 Score": np.percentile(f1_scores, 25),
-    }
-
-    q3_scores = {
-        "Accuracy": np.percentile(results["test_accuracy"], 75),
-        "Precision": np.percentile(results["test_precision"], 75),
-        "F1 Score": np.percentile(f1_scores, 75),
-    }
-
-    print("Median Scores:")
-    print(median_scores)
-    print("1st Quartile Scores:")
-    print(q1_scores)
-    print("3rd Quartile Scores:")
-    print(q3_scores)
-
-    # Save median, 1st quartile, and 3rd quartile of f1_score
-    f1_scores_data = {
-        "Median": np.median(f1_scores),
-        "1st Quartile": np.percentile(f1_scores, 25),
-        "3rd Quartile": np.percentile(f1_scores, 75),
-    }
-    save_variable(f1_scores_data, name + "_f1_2080", saved_result_path_classification)
-
-
-def classification_results(X, y, name, clf, skf):
-    prediction = []
-    gt = []
-    proba = []
-
-    scaler = StandardScaler()
-    fold = 0
-    f1_scores = []
-
-    # clf = GridSearchCV(estimator=clf_model, param_grid=params, cv=skf, scoring='f1', n_jobs=-1)
-
-    idx = skf.split(X, y)  # Constant splitting
-
-    for train_index, test_index in idx:
-        fold = fold + 1
-        print("Fold:")
-        print(fold)
-
-        y_train, y_test = y[train_index], y[test_index]
-        X_train, X_test = X[train_index].tolist(), X[test_index].tolist()
-
-        X_train = scaler.fit_transform(X_train)
-        X_test = scaler.transform(X_test)
-
-        clf.fit(X_train, y_train)
-        res = clf.predict(X_test)
-        pr = clf.predict_proba(X_test)
-
-        prediction.append(res)  # save
-        gt.append(y_test)  # calc cm su y_test e pr
-        proba.append(pr)
-
-        best_pars = clf.best_params_
-        print(best_pars)
-
-        fold_f1_score = f1_score(y_test, res)
-        f1_scores.append(fold_f1_score)  # Store f1_score for this fold
-
-    gt = np.hstack(gt)
-    prediction = np.hstack(prediction)
-    pp = np.vstack(proba)
-
-    scoring = {
-        "accuracy": make_scorer(accuracy_score),
-        "precision": make_scorer(precision_score),
-        "recall": make_scorer(recall_score),
-        "f1_score": make_scorer(f1_score),
-    }
-
-    results = model_selection.cross_validate(
-        estimator=clf, X=X, y=y, cv=skf, scoring=scoring
-    )
-
-    # save_variable(results, name + '_results')
-    # save_variable([gt, prediction, pp, X_train, X_test, y_train, y_test, clf, results, f1_scores], name)  # Save variables
-    clf_performances(results, f1_scores, name)  # Print performances
-    return [
-        gt,
-        prediction,
-        pp,
-        X_train,
-        X_test,
-        y_train,
-        y_test,
-        clf,
-        results,
-        f1_scores,
-    ]
-
-    # plt.close()
-
-    # scores = [f1_scores_data['Median'], f1_scores_data['1st Quartile'], f1_scores_data['3rd Quartile']]
-
-    # plt.figure(figsize=(6, 4))
-    # plt.boxplot(scores, vert=False)
-    # plt.title('F1 Score Distribution')
-    # plt.xlabel('Scores')
-    # plt.yticks([1], ['F1 Score'])
-    # plt.show()
-    # global_path = '/content/drive/MyDrive/Colab Notebooks/GENOMIT'
-    # saved_result_path_classification = os.path.join(global_path, 'saved_results')
-    # plt.savefig(os.path.join(saved_result_path_classification, (file_name+'.png')),format="png", bbox_inches="tight")
-
-
-def perform_classifier_operations(classifier_name, columns, target_names):
-    # Load class results
-    [
-        gt,
-        prediction,
-        pp,
-        X_train,
-        X_test,
-        y_train,
-        y_test,
-        clf,
-        results,
-        f1_scores,
-        importances,
-    ] = load_pickle_variable(
-        classifier_name + "_results2080", saved_result_path_classification
-    )
-
-    # Print the results
-    # Best score achieved during the GridSearchCV
-    print(
-        "GridSearch CV best score for {}: {:.4f}\n".format(
-            classifier_name, clf.best_score_
-        )
-    )
-    # Print parameters that give the best results
-    print(
-        "Parameters that give the best results for {}:\n".format(classifier_name),
-        clf.best_params_,
-    )
-    # Print estimator that was chosen by the GridSearch
-    print(
-        "\nEstimator that was chosen by the search for {}:\n".format(classifier_name),
-        clf.best_estimator_,
-    )
-    target_names = ["Childhood", "Adults"]
-    print(classification_report(gt, prediction, target_names=target_names))
-    clf_performances(results, f1_scores, classifier_name)
-
-    # Plot Precision-recall curve
-    precision_recall_plot(
-        gt,
-        pp,
-        "Precision-Recall Curve - {} Classification - ".format(classifier_name),
-        f"PR_{classifier_name}_2080",
-        global_path,
-    )
-    plt.close()
-
-    # Confusion matrix
-    conf_mat = metrics.confusion_matrix(gt, prediction)
-    # Plot confusion matrix
-    confusion_matrix_plot(
-        conf_mat,
-        "Confusion Matrix - {} Classification - ".format(classifier_name),
-        f"CM_{classifier_name}_2080.png",
-    )  # Confusion matrix and name to save  confusion matrix
-    plt.close()
-    # Get feature importances from the best estimator
-    # importances = clf.best_estimator_.feature_importances_
-
-    # Call the plot_top_feature_importance function to plot and save the top 10 feature importance plot
-    print("importances: ", len(importances))
-    print("columns:", len(columns))
-
-    plot_top_feature_importance(
-        importances, columns, f"FI_{classifier_name}_2080", global_path, top_n=10
-    )
-    plt.close()
-    # Load F1 scores data
-    f1_scores_data = load_pickle_variable(
-        classifier_name + "_f1_2080", saved_result_path_classification
-    )
-    # plot_f1_scores_boxplot(f1_scores_data, 'BX_{}_'.format(classifier_name),saved_result_path_classification)
-    plt.close()
-
-
-def calculate_percentages():
-    # Given data
-    nerv_involved = 112
-    nerv_not_involved = 124
-
-    normal = 164
-    nDNA_mtDNA = 616
-
-    mono_oligo = 544
-    multi = 236
-
-    aao_60_minus = 291
-    aao_60_plus = 409
-
-    # Calculate percentages
-    nerv_percentage = {
-        "nerv_involved": nerv_involved / (nerv_involved + nerv_not_involved) * 100,
-        "nerv_not_involved": nerv_not_involved
-        / (nerv_involved + nerv_not_involved)
-        * 100,
-    }
-
-    mtDNA_percentage = {
-        "normal": normal / (normal + nDNA_mtDNA) * 100,
-        "nDNA_mtDNA": nDNA_mtDNA / (normal + nDNA_mtDNA) * 100,
-    }
-
-    mono_multi_percentage = {
-        "mono_oligo": mono_oligo / (mono_oligo + multi) * 100,
-        "multi": multi / (mono_oligo + multi) * 100,
-    }
-
-    aao_percentage = {
-        "60_minus": aao_60_minus / (aao_60_minus + aao_60_plus) * 100,
-        "60_plus": aao_60_plus / (aao_60_minus + aao_60_plus) * 100,
-    }
-
-    return nerv_percentage, mtDNA_percentage, mono_multi_percentage, aao_percentage
 
 
 # %% Feature ranking on the training set using cross-validation
@@ -490,9 +88,6 @@ def rankfeatures(X_train, Y_train, frmethod, nFolds, nFeatures, thr, kf):
 
     # print('Y_train', Y_train)
     top_features_all = []
-
-    if frmethod == "relieff":
-        relieff = ReliefF(n_neighbors=5)
 
     # Iterate over training sets, leaving out data from N/5 patients at a time
     patient_indices = np.arange(X_train.shape[0])  # np.unique(S)
@@ -512,14 +107,7 @@ def rankfeatures(X_train, Y_train, frmethod, nFolds, nFeatures, thr, kf):
         # print('X_train_cv shape: ', X_train_cv.shape)
         # print('y_train_cv shape: ', y_train_cv.shape)
 
-        if frmethod == "relieff":
-            print(f"Relieff feature ranking - Fold {fold+1} of {nFolds}")
-            # Feature ranking using ReliefF
-            relieff.fit(X_train_cv, y_train_cv)
-            # Get the weights of the features
-            feature_weights = relieff.feature_importances_
-            top_feature_indices = np.argsort(feature_weights)[::-1][:nFeatures]
-        elif frmethod == "mrmr":
+        if frmethod == "mrmr":
             print(f"MRMR feature ranking - Fold {fold+1} of {nFolds}")
             # Feature ranking using MRMR
             top_feature_indices = mrmr.mrmr_regression(
@@ -594,7 +182,7 @@ def process_gendna_column(df):
 
     # Count the NaN values in the 'gendna' column
     nan_count = df["gendna"].isna().sum()
-    # print(f"Number of NaN values in '{column}': {nan_count}")
+    #print(f"Number of NaN values in '{column}': {nan_count}")
 
     # Save patients with NaN 'gendna' information to a file
     file_path = os.path.join(
@@ -618,8 +206,8 @@ def process_gendna_column(df):
         index=False,
     )
     # print the dimension of the file
-    print("Patients with NaN or 1 'gendna' information saved to:", file_path)
-    print("Dimension of the file:", patients_with_nan_gendna.shape)
+    #print("Patients with NaN or 1 'gendna' information saved to:", file_path)
+    #print("Dimension of the file:", patients_with_nan_gendna.shape)
 
     # Drop NaN values from 'gendna' column
     df_non_nan = df.dropna(subset=["gendna"])
@@ -628,8 +216,8 @@ def process_gendna_column(df):
     df_non_nan = df_non_nan[df_non_nan["gendna"] != 1]
 
     # print the number of rows removed and the new number of rows
-    print(f"Number of rows removed: {len(df) - len(df_non_nan)}")
-    print(f"New number of rows: {len(df_non_nan)}")
+    #print(f"Number of rows removed: {len(df) - len(df_non_nan)}")
+    #print(f"New number of rows: {len(df_non_nan)}")
 
     # Create 'nDNA' and 'mtDNA' classes
     df_non_nan["nDNA"] = df_non_nan["gendna"].apply(
@@ -690,13 +278,6 @@ def define_X_y(df, columns_to_drop):
     # Convert X_df to numpy array
     X = df.values
 
-    # Print the type and dimension of X and y
-    print("\nType and Dimension of X:")
-    print(type(X), X.shape)
-
-    print("\nType and Dimension of y:")
-    print(type(y), y.shape)
-
     return X, y
 
 
@@ -720,76 +301,116 @@ def fill_missing_values(df):
     return df
 
 
-def experiment_definition(X, y, X_df, saved_result_path_classification, num_folds=5):
-    # Paths to required files
-    test_subjects_path = os.path.join(
-        saved_result_path_classification, "saved_data/test_subjects_num.pkl"
+def add_patients_to_reach_179(test_subjects_ids, df):
+    num_required = 179
+    current_count = len(test_subjects_ids)
+    missing_patients = num_required - current_count
+
+    if missing_patients <= 0:
+        print("No additional patients are needed.")
+        return test_subjects_ids
+
+    # Select missing patients that are not already in test_subjects_ids
+    available_patients = df.loc[~df["subjid"].isin(test_subjects_ids), "subjid"]
+
+    if missing_patients > len(available_patients):
+        raise ValueError("Not enough new patients to reach the required count of 179.")
+
+    new_patients = available_patients.sample(n=missing_patients, random_state=42)
+
+    # Add the new patients to test_subjects_ids
+    updated_test_subjects_ids = test_subjects_ids + new_patients.tolist()
+
+    print(
+        f"Number of missing patients: {missing_patients}, "
+        f"added {len(new_patients)} new patients. Total now: {len(updated_test_subjects_ids)}."
     )
-    kf_path = os.path.join(saved_result_path_classification, "kf.pkl")
 
-    # Load the previously saved test subject IDs from a pickle file
-    if not os.path.exists(test_subjects_path):
-        raise FileNotFoundError(
-            "Saved test subjects file is missing. Test subjects must be defined first."
-        )
+    return updated_test_subjects_ids
 
-    with open(test_subjects_path, "rb") as f:
-        test_subjects_ids = pickle.load(f)
 
-    # Load KFold object if it exists
-    if not os.path.exists(kf_path):
-        kf = KFold(
-            n_splits=num_folds, shuffle=True, random_state=42
-        )  # Default KFold setup if not previously saved
+def experiment_definition(X, y, X_df, saving_path, num_folds=5):
+
+    classifier_config_path = os.path.join(saving_path, "classifier_configuration.pkl")
+
+    if not os.path.exists(classifier_config_path):
+        print("Classifier configuration does not exist. Creating the configuration...")
+
+        test_subjects_path = os.path.join(
+            saved_result_path_classification, "saved_data", "test_subjects_final.pkl"
+        )  # "test_subjects_num.pkl")#
+
+        if not os.path.exists(test_subjects_path):
+            raise FileNotFoundError(
+                "Saved test subjects file is missing. Test subjects must be defined first."
+            )
+
+        with open(test_subjects_path, "rb") as f:
+            test_subjects_ids = pickle.load(f)
+
+        # Filter test indices and ensure test_subjects_ids aligns with the dataframe
+        existing_test_indices = X_df[X_df["subjid"].isin(test_subjects_ids)].index
+        test_subjects_ids = X_df.loc[existing_test_indices, "subjid"].tolist()
+
+        if len(test_subjects_ids) < 179:
+            test_subjects_ids = add_patients_to_reach_179(test_subjects_ids, X_df)
+            test_subjects_path = os.path.join(
+                saved_result_path_classification,
+                "saved_data",
+                "test_subjects_final.pkl",
+            )
+            with open(test_subjects_path, "wb") as f:
+                pickle.dump(test_subjects_ids, f)
+            print(f"Updated test subjects saved to: {test_subjects_path}")
+
+        # Set up KFold
+        kf_path = os.path.join(saved_result_path_classification, "kf.pkl")
+        if os.path.exists(kf_path):
+            with open(kf_path, "rb") as f:
+                kf = pickle.load(f)
+        else:
+            kf = KFold(n_splits=num_folds, shuffle=True, random_state=42)
+
+        # Determine train and test indices
+        test_indices = X_df[X_df["subjid"].isin(test_subjects_ids)].index
+        train_indices = X_df.index.difference(test_indices)
+
+        if len(test_indices) + len(train_indices) != len(X_df):
+            raise ValueError("Mismatch in expected number of indices.")
+
+        X_train_df, X_test_df = X_df.loc[train_indices], X_df.loc[test_indices]
+        y_train, y_test = y.loc[train_indices], y.loc[test_indices]
+
+        features = X_df.drop(columns=["subjid"]).columns
+        scorer = make_scorer(f1_score, average="weighted")
+
+        # Prepare classifier configuration dictionary
+        classifier_config = {
+            "kf": kf,
+            "scorer": scorer,
+            "X_test": X_test_df.drop(columns=["subjid"]).values,
+            "y_test": y_test.values,
+            "X_train": X_train_df.drop(columns=["subjid"]).values,
+            "y_train": y_train.values,
+            "num_folds": num_folds,
+            "nFeatures": 15,
+            "thr": 0.25,
+            "train_subjects": X_train_df["subjid"].values,
+            "test_subjects": X_test_df["subjid"].values,
+            "train_indices": train_indices,
+            "test_indices": test_indices,
+            "features": features,
+        }
+
+        os.makedirs(saved_result_path_classification, exist_ok=True)
+        with open(classifier_config_path, "wb") as f:
+            pickle.dump(classifier_config, f)
+            print(f"Classifier configuration saved to {classifier_config_path}")
     else:
-        with open(kf_path, "rb") as f:
-            kf = pickle.load(f)
+        with open(classifier_config_path, "rb") as f:
+            classifier_config = pickle.load(f)
+        print("Classifier configuration loaded successfully.")
 
-    # Create a scorer for F1 score
-    scorer = make_scorer(f1_score, average="weighted")
-
-    # Define additional parameters for feature selection
-    nFeatures = 15  # Maximum number of features to select
-    thr = 0.25  # Threshold to select top 25% features
-
-    # Use train_test_split to derive train/test indices based on previously saved test_subject_ids
-    test_indices = X_df[X_df["subjid"].isin(test_subjects_ids)].index
-    train_indices = X_df.index.difference(test_indices)
-
-    X_train_df = X_df.loc[train_indices]
-    X_test_df = X_df.loc[test_indices]
-    y_train = y.loc[train_indices]
-    y_test = y.loc[test_indices]
-
-    # Prepare a dictionary to hold the classifier configuration
-    classifier_config = {
-        "kf": kf,
-        "scorer": scorer,
-        "X_test": X_test_df.drop(columns=["subjid"]).values,
-        "y_test": y_test.values,
-        "X_train": X_train_df.drop(columns=["subjid"]).values,
-        "y_train": y_train.values,
-        "num_folds": num_folds,
-        "nFeatures": nFeatures,
-        "thr": thr,
-        "train_subjects": X_train_df["subjid"].values,
-        "test_subjects": X_test_df["subjid"].values,
-        "train_indices": train_indices,
-        "test_indices": test_indices,
-    }
-
-    # Ensure the directory exists where configurations will be saved
-    os.makedirs(saved_result_path_classification, exist_ok=True)
-
-    # Save the classifier configuration
-    config_file = os.path.join(
-        saved_result_path_classification, "classifier_configuration.pkl"
-    )
-    with open(config_file, "wb") as f:
-        pickle.dump(classifier_config, f)
-        print(f"Classifier configuration saved to {config_file}")
-
-    # Return the relevant variables
     return (
         classifier_config["X_train"],
         classifier_config["X_test"],
@@ -797,265 +418,82 @@ def experiment_definition(X, y, X_df, saved_result_path_classification, num_fold
         classifier_config["y_test"],
         classifier_config["train_subjects"],
         classifier_config["test_subjects"],
-        kf,
-        scorer,
-        thr,
-        nFeatures,
-        num_folds,
+        classifier_config["features"],
+        classifier_config["kf"],
+        classifier_config["scorer"],
+        classifier_config["thr"],
+        classifier_config["nFeatures"],
+        classifier_config["num_folds"],
     )
 
 
-def perform_classification(
-    clf_model,
-    param_grid,
-    pipeline,
-    X_df,
-    X_train,
-    X_test,
-    y_train,
-    y_test,
-    kf,
-    scorer,
-    features,
-    balancing_technique,
-    feature_selection_option,
-):
-    """
-    Perform classification using the specified classifier.
 
-    Parameters:
-        clf_model: Classifier model object (e.g., XGBClassifier, SVC, etc.).
-        param_grid: Parameter grid for grid search.
-        X_train (array-like): Features of the training set.
-        X_test (array-like): Features of the test set.
-        y_train (array-like): Target variable of the training set.
-        y_test (array-like): Target variable of the test set.
-        kf (KFold): Cross-validation iterator.
-        scorer (object): Scorer for model evaluation.
-        features (list): List of feature names.
-        saved_result_path_classification (str): Path to save classification results.
+"""
 
-    Returns:
-        None
-    """
-
-    # handle missing values
-    # X_train = np.nan_to_num(X_train, nan=988)
-    # X_test = np.nan_to_num(X_test, nan=988)
-
-    # print the number of missing values in X_train and X_test
-    # print('Number of missing values in X_train:', np.isnan(X_train).sum())
-    # print('Number of missing values in X_test:', np.isnan(X_test).sum())
-
-    # Perform grid search for hyperparameter tuning
-    if balancing_technique == "mrmr":  # TODO: Update
-        selector = SequentialFeatureSelector(
-            clf_model, direction="backward", scoring=scorer, cv=kf, n_jobs=-1
-        )
-        pipeline = Pipeline(
-            [
-                ("imputer", SimpleImputer(strategy="mean")),
-                ("selector", selector),
-                ("clf", clf_model),
-            ]
-        )
-
-        # maybe for RF
-        new_keys = {
-            "n_estimators": "clf__n_estimators",
-            "max_depth": "clf__max_depth",
-            "min_samples_split": "clf__min_samples_split",
-        }
-        # for XGB
-        new_keys = {
-            "max_depth": "clf__max_depth",
-            "n_estimators": "clf__n_estimators",
-            "learning_rate": "clf__learning_rate",
-        }
-
-        # for SVM
-        # new_keys = {"C": "clf__C", "gamma": "clf__gamma", "kernel": "clf__kernel"}
-
-        # Rename keys in param_grid
-        param_grid = {new_keys.get(k, k): v for k, v in param_grid.items()}
-        param_grid.update(
-            {
-                "selector__n_features_to_select": [
-                    i for i in range(1, len(X_train[0]) + 1)
-                ]
-            }
-        )
-
-        grid_search = GridSearchCV(
-            pipeline,
-            param_grid,
-            cv=kf,
-            scoring=scorer,
-            verbose=1,
-            n_jobs=-1,
-            return_train_score=True,
-        )
-
-    else:
-        grid_search = GridSearchCV(
-            estimator=clf_model,
-            param_grid=param_grid,
-            cv=kf,
-            scoring=scorer,
-            verbose=1,
-            n_jobs=-1,
-            return_train_score=True,
-        )
-
-    # grid_search = GridSearchCV(pipeline, param_grid, cv=5, scoring=scorer, verbose=1, n_jobs=-1)
-    grid_search.fit(X_train, y_train)
-
-    # Get the best parameters and best estimator from grid search
-    best_params = grid_search.best_params_
-    best_estimator = grid_search.best_estimator_
-    best_score_ = grid_search.best_score_
-
-    cv_results = grid_search.cv_results_
-    print("CV RESULTS:______________________________________________________")
-    print("Best params:", best_params)
-    print("Best estimator:", best_estimator)
-    print("Best score:", best_score_)
-
-    # print(cv_results['mean_train_score'])
-    # print(cv_results['mean_score_time'])
-    # max_mean_train_score = max(cv_results['mean_train_score'])
-    # max_mean_test_score = max(cv_results["mean_test_score"])
-    # print("Max Mean Train Score: ", max_mean_train_score)
-    # print("Max Mean Test Score (F1-weighted): ", max_mean_test_score)
-    print("=================================================================")
-
-    # Make predictions on the test set
+    # Evaluate model on the test set
     y_pred = best_estimator.predict(X_test)
 
-    # Print the best parameters from grid search
-    print("Best Parameters:")
-    print(grid_search.best_params_)
+    print("Best Parameters:\n", best_params)
+    print("Classification Report:\n", classification_report(y_test, y_pred))
 
-    # Print the classification report
-    print("Classification Report:")
-    print(classification_report(y_test, y_pred))
-
-    # Define the labels for the confusion matrix
-    class_labels = ["nDNA", "mtDNA"]
-
-    # Compute and print the confusion matrix
+    # Confusion Matrix
     conf_matrix = confusion_matrix(y_test, y_pred)
-    print("Confusion Matrix:")
-    print(conf_matrix)
+    print("Confusion Matrix:\n", conf_matrix)
 
-    # Plot Confusion Matrix
-    print("Plotting Confusion Matrix...")
-    confusion_matrix_file = f"cm_{clf_model.__class__.__name__}_{feature_selection_option}_{balancing_technique}"
-    plot_confusion_matrix(
-        y_test,
-        y_pred,
-        os.path.join(saved_result_path_classification, confusion_matrix_file),
-    )
-    plt.close()
-
-    # Calculate and Plot Importances from xgb methods
-    print("Calculating and Plotting Importances...")
-    if feature_selection_option == "mrmr":
-        try:
-            selected_features_mask = best_estimator.named_steps["selector"].support_
-            # selected_features_mask = selector.support_
-            selected_features = [
-                feature
-                for feature, selected in zip(features, selected_features_mask)
-                if selected
-            ]
-            print("Selected features:", selected_features)
-        except Exception as e:
-            print("Error calculating feature importances:", str(e))
-
+    # Feature Importances
+    importances = None
+    feature_importance_data = None
     if hasattr(best_estimator, "feature_importances_"):
-
         importances = best_estimator.feature_importances_
-
-        print("Importances:", importances)
-        print("Features:", features)
-        feature_importances = {
-            features[i]: importances[i] for i in range(len(importances))
-        }
-        indices_all = np.argsort(importances)  # Sort indices by importance
+        indices_all = np.argsort(importances)
         feature_importance_data = {
-            "feature_importances": feature_importances,
-            "top_10_features": {features[i]: importances[i] for i in indices_all},
+            "feature_importances": {features[i]: importances[i] for i in range(len(importances))},
+            "top_10_features": {features[i]: importances[i] for i in indices_all[-10:]}
         }
-        print("Feature Importances data:", feature_importance_data)
+        plot_top_feature_importance(importances, features, clf_model.__class__.__name__, results_path)
 
-        # Plot ALL feature importances
-        plt.figure(figsize=(10, 8))
-        plt.title("All feature Importances", fontsize=15)
-        plt.barh(
-            range(len(indices_all)),
-            importances[indices_all],
-            color="lightblue",
-            align="center",
-        )
-        plt.yticks(
-            range(len(indices_all)),
-            [features[i] for i in indices_all],
-            ha="right",
-            fontsize=10,
-        )
-        plt.xlabel("Relative Importance", fontsize=15)
-        feature_importance_file = f"feature_imp_ALL_{clf_model.__class__.__name__}_{feature_selection_option}_{balancing_technique}.png"
-        plt.savefig(
-            os.path.join(saved_result_path_classification, feature_importance_file),
-            format="png",
-            bbox_inches="tight",
-        )
-        plt.close()
 
-        # Plot ONLY top 10 feature importances
-        indices = np.argsort(importances)[
-            -10:
-        ]  # Select the top 10 most important features
-        plt.title("Top 10 Feature Importances", fontsize=15)
-        plt.barh(
-            range(len(indices)), importances[indices], color="lightblue", align="center"
-        )  # Use light blue color
-        plt.yticks(
-            range(len(indices)), [features[i] for i in indices], ha="right", fontsize=10
-        )  # Rotate labels
-        plt.xlabel("Relative Importance", fontsize=15)
+    #Save the results
+    # Saving results
+    results_to_save = {
+        "name": clf_model.__class__.__name__,
+        "best_params": best_params,
+        "best_estimator": best_estimator,
+        "best_score": best_score_,
+        "cv_results": cv_results,
+        "y_pred": y_pred,
+        "y_test": y_test,
+        "classification_report": classification_report(y_test, y_pred, output_dict=True),
+        "confusion_matrix": conf_matrix,
+        "importances": importances,
+        "feature_importance_data": feature_importance_data,
+    }
 
-        feature_importance_file = f"feature_imp_{clf_model.__class__.__name__}_{feature_selection_option}_{balancing_technique}.png"
-        plt.savefig(
-            os.path.join(saved_result_path_classification, feature_importance_file),
-            format="png",
-            bbox_inches="tight",
-        )
-        plt.close()
-    else:
-        print("No importances available")
+    # Path to save the results
+    # Make directory path
+    model_results_path = os.path.join(results_path, clf_model.__class__.__name__)
 
-    # Plot SHAP Barh Plot
-    if hasattr(clf_model, "predict_proba"):
-        try:
-            # classifier_model = clf_model.named_steps['clf']  # Extracting the classifier from the pipeline
-            explainer = shap.Explainer(best_estimator, X_df)
-            # shap_values = explainer(X_test)
-            shap_values = explainer(X_df)
-            shap.plots.bar(shap_values)
+    # Create directories if they do not exist
+    os.makedirs(model_results_path, exist_ok=True)
 
-            # Save the plot as a PNG file
-            shap_bar_plot_file = f"shap_bar_plot_{clf_model.__class__.__name__}_{feature_selection_option}_{balancing_technique}.png"
-            plt.savefig(
-                os.path.join(saved_result_path_classification, shap_bar_plot_file),
-                format="png",
-                bbox_inches="tight",
-            )
-            plt.close()
+    # Path to save the results
+    results_file_path = os.path.join(model_results_path, f"clf_results_{clf_model.__class__.__name__}_{feature_selection_option}_{balancing_technique}.pkl")
+    with open(results_file_path, "wb") as f:
+        pickle.dump(results_to_save, f)    
+    print(f"Results saved to {results_file_path}")
+    
+    
 
-        except Exception as e:
-            print("Error plotting SHAP bar plot:", str(e))
+    # Use your updated plot_confusion_matrix function
+    confusion_matrix_file = f"cm_{clf_model.__class__.__name__}_{feature_selection_option}_{balancing_technique}"
+    plot_confusion_matrix(y_test, y_pred, confusion_matrix_file)
+
+
+    # SHAP Values
+    if hasattr(best_estimator, "predict_proba"):
+        plot_shap_values(best_estimator, X_train, results_path, clf_model.__class__.__name__, feature_selection_option, balancing_technique)
+
+"""
 
 
 def perform_classification_best(  # it is also saving the best model results
@@ -1101,7 +539,7 @@ def perform_classification_best(  # it is also saving the best model results
     # print('Number of missing values in X_test:', np.isnan(X_test).sum())
 
     # Perform grid search for hyperparameter tuning
-    if balancing_technique == "mrmr":  # TODO: Update
+    if balancing_technique == "mrmr":
         selector = SequentialFeatureSelector(
             clf_model, direction="backward", scoring=scorer, cv=kf, n_jobs=-1
         )
@@ -1309,6 +747,30 @@ def perform_classification_best(  # it is also saving the best model results
 
         except Exception as e:
             print("Error plotting SHAP bar plot:", str(e))
+
+    best_estimator_file = f"best_estimator_{clf_model.__class__.__name__}_{feature_selection_option}_{balancing_technique}.pkl"
+    with open(
+        os.path.join(saved_result_path_classification, best_estimator_file), "wb"
+    ) as f:
+        pickle.dump(best_estimator, f)
+    print(f"Best estimator saved to {best_estimator_file}")
+
+    ## Save all relevant results to a file
+    # Save all relevant results to a file
+    results_to_save = {
+        "best_params": best_params,
+        "best_estimator": best_estimator,
+        "best_score": best_score_,
+        "cv_results": cv_results,
+        "y_pred": y_pred,
+        "y_test": y_test,
+        "classification_report": classification_report(
+            y_test, y_pred, output_dict=True
+        ),
+        "confusion_matrix": conf_matrix,
+        "importances": importances,
+        "feature_importance_data": feature_importance_data,
+    }
 
     # Save the best estimator to a file
     best_estimator_file = f"best_estimator_{clf_model.__class__.__name__}_{feature_selection_option}_{balancing_technique}.pkl"
@@ -1478,6 +940,9 @@ def process_feature_selection(
     param_grid_selected = param_grid
     pipeline_selected = pipeline
 
+    #Remove missing values
+
+
     if feature_selection == "pca":
         print("Starting PCA")
         imputer_X = SimpleImputer(strategy="mean")
@@ -1574,24 +1039,54 @@ def process_feature_selection(
         )
     elif feature_selection == "select_from_model":
         print("Feature selection using SelectFromModel...")
-        selector = SelectFromModel(estimator=clf_model)
-        X_train_selected = selector.fit_transform(X_train, y_train)
-        X_test_selected = selector.transform(X_test)
+        try:
+            selector = SelectFromModel(estimator=clf_model)
+            X_train_selected = selector.fit_transform(X_train, y_train)
+            X_test_selected = selector.transform(X_test)
 
-        selected_features = X_df.columns[selector.get_support()]
-        print("Selected Features:")
-        print(selected_features)
-        print("Number of Selected Features:", len(selected_features))
+            # Rimuove la colonna 'subjid' se esiste in X_df
+            if "subjid" in X_df.columns:
+                X_df = X_df.drop(columns=["subjid"])
+
+            selected_features = X_df.columns[selector.get_support()]
+            print("Selected Features:")
+            print(selected_features)
+            print("Number of Selected Features:", len(selected_features))
+
+        except Exception as e:
+            print(f"Error during feature selection: {e}")
+            print("Falling back to default configuration (no feature selection applied).")
+            
+            # Nessuna selezione di feature applicata
+            X_train_selected = X_train
+            X_test_selected = X_test
+            param_grid_selected = param_grid
+            pipeline_selected = pipeline 
+
 
     elif feature_selection == "rfe":
         print("Feature selection using Recursive Feature Elimination (RFE)...")
-        selector = RFE(estimator=clf_model, n_features_to_select=nFeatures)
-        X_train_selected = selector.fit_transform(X_train, y_train)
-        X_test_selected = selector.transform(X_test)
-        selected_features = X_df.columns[selector.get_support()]
-        print("Selected Features:")
-        print(selected_features)
-        print("Number of Selected Features:", len(selected_features))
+        try:
+            selector = RFE(estimator=clf_model, n_features_to_select=nFeatures, step=5) #step to reduce the number of features
+            
+            X_train_selected = selector.fit_transform(X_train, y_train)
+
+            X_test_selected = selector.transform(X_test)
+            #Remove the column subjid
+            X_df = X_df.drop(columns=["subjid"])
+            selected_features = X_df.columns[selector.get_support()]
+            print("Selected Features:")
+            print(selected_features)
+            print("Number of Selected Features:", len(selected_features))
+        except Exception as e:
+            print(f"Error during feature selection: {e}")
+            print("Falling back to default configuration (no feature selection applied).")
+            
+            # Nessuna selezione di feature applicata
+            X_train_selected = X_train
+            X_test_selected = X_test
+            param_grid_selected = param_grid
+            pipeline_selected = pipeline 
 
     else:
         # No feature selection applied
@@ -1599,8 +1094,6 @@ def process_feature_selection(
         X_test_selected = X_test
         param_grid_selected = param_grid
         pipeline_selected = pipeline
+    
 
     return X_train_selected, X_test_selected, param_grid_selected, pipeline_selected
-
-
-# %%
