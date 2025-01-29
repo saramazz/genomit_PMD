@@ -332,8 +332,7 @@ df_num.to_csv(saved_result_path + "/df_Global_num.csv", index=False)
 
 print("Plotting missing values...")
 plot_missing_values(
-    df, os.path.join(global_path, "saved_results/distribution_variables")
+    df, os.path.join(global_path, "saved_results/distribution_variables","Histogram_MissingValues_df_Global.png" )
 )
-
 
 print("Script execution completed.")

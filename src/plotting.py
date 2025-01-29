@@ -29,28 +29,31 @@ PLOT PREPROCESSING
 """
 
 
-def plot_missing_values(df, saved_result_path):
+def plot_missing_values(df, saved_result_path, file_name):
+    # Calculate missing values and their percentages
     missing_values = df.isnull().sum()
     total_values = len(df)
     missing_percentages = (missing_values / total_values) * 100
     missing_data = pd.DataFrame(
         {"Missing Values": missing_values, "Missing Percentage": missing_percentages}
     )
+    # Sort the data by missing percentage
     missing_data = missing_data.sort_values(by="Missing Values", ascending=False)
-    plt.figure(figsize=(12, 18))
-    plt.barh(missing_data.index, missing_data["Missing Values"], color="lightcoral")
-    plt.xlabel("Number of Missing Values")
+    
+    # Plotting
+    plt.figure(figsize=(15, 25))
+    plt.barh(missing_data.index, missing_data["Missing Percentage"], color="lightcoral")
+    plt.xlabel("Percentage of Missing Values (%)")
     plt.ylabel("Variable Name")
-    plt.title("Missing Values for Each Variable")
+    plt.title("Missing Values Percentage for Each Variable")
     plt.gca().invert_yaxis()
     # Decrease the font size on the y-axis
     plt.yticks(fontsize=10)
     plt.grid()
-    my_file = "Histogram_MissingValues_df_Global.png"
-    plt.savefig(os.path.join(saved_result_path, my_file), bbox_inches="tight")
-    # print that has been saved in the path
+    plt.savefig(os.path.join(saved_result_path, file_name), bbox_inches="tight")
+    
+    # Print statement to confirm the plot has been saved
     print(f"Missing values plot saved in {saved_result_path}")
-    # plt.show()
     plt.close()
 
 

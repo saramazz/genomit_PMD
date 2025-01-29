@@ -156,20 +156,41 @@ def setup_output(current_datetime):
     sys.stdout = open(os.path.join(BEST_PATH, file_name), "w")
 
 
-def perform_classification_best(X_test, y_test, best_estimator, results_path):
+def perform_classification_best(X_test, y_test, clf_model, results_path, features):
+    '''
+    Function to predict on the test set and print the classification results and plots
+    '''
+
     # Evaluate on the test set
-    y_pred = best_estimator.predict(X_test)
+    y_pred = clf_model.predict(X_test)
 
     # Calculate performance metrics
     conf_matrix = confusion_matrix(y_test, y_pred)
     accuracy = accuracy_score(y_test, y_pred)
     class_report = classification_report(y_test, y_pred)
 
-    # Store results
+    # Check if the model has feature importances
+    if hasattr(clf_model, "feature_importances_"):
+        importances = clf_model.feature_importances_
+        feature_importances = {features[i]: importances[i] for i in range(len(importances))}
+        indices_all = np.argsort(importances)  # Sort indices by importance
+        feature_importance_data = {
+            "feature_importances": feature_importances,
+            "top_10_features": {features[i]: importances[i] for i in indices_all[-10:]},
+        }
+    else:
+        importances = np.array([])  # handle cases where feature importances are not available
+        feature_importance_data = {}
+
+    # Save all relevant results to a file
     results_to_save = {
         "confusion_matrix": conf_matrix,
         "accuracy": accuracy,
-        "classification_report": class_report,
+        "classification_report": classification_report(y_test, y_pred, output_dict=True),
+        "y_pred": y_pred,
+        "y_test": y_test,
+        "importances": importances,
+        "feature_importance_data": feature_importance_data,
     }
 
     # Create results directory if needed and save pickled results
@@ -182,6 +203,47 @@ def perform_classification_best(X_test, y_test, best_estimator, results_path):
     print(f"Confusion Matrix:\n{conf_matrix}")
     print(f"Accuracy: {accuracy}")
     print(f"Classification Report:\n{class_report}")
+
+    # Plot Confusion Matrix
+    print("Plotting Confusion Matrix...")
+    confusion_matrix_file = "cm_best_model.png"
+    plot_confusion_matrix(y_test, y_pred, os.path.join(results_path, confusion_matrix_file))
+    plt.close()
+
+    # Plot Importances if available
+    if importances.size > 0:
+        print("Calculating and Plotting Importances...")
+        plt.figure(figsize=(10, 8))
+        plt.title("All feature Importances", fontsize=15)
+        plt.barh(range(len(indices_all)), importances[indices_all], color="lightblue", align="center")
+        plt.yticks(range(len(indices_all)), [features[i] for i in indices_all], ha="right", fontsize=10)
+        plt.xlabel("Relative Importance", fontsize=15)
+        feature_importance_file = "feature_imp_best_ALL.png"
+        plt.savefig(os.path.join(results_path, feature_importance_file), format="png", bbox_inches="tight")
+        plt.close()
+
+        # Plot ONLY top 10 feature importances
+        plt.figure(figsize=(10, 8))
+        plt.title("Top 10 Feature Importances", fontsize=15)
+        plt.barh(range(len(indices_all[-10:])), importances[indices_all[-10:]], color="lightblue", align="center")
+        plt.yticks(range(len(indices_all[-10:])), [features[i] for i in indices_all[-10:]], ha="right", fontsize=10)
+        plt.xlabel("Relative Importance", fontsize=15)
+        feature_importance_file = "feature_imp_best_10.png"
+        plt.savefig(os.path.join(results_path, feature_importance_file), format="png", bbox_inches="tight")
+        plt.close()
+
+    # Plot SHAP Bar plot if possible
+    if hasattr(clf_model, "predict_proba"):
+        try:
+            explainer = shap.Explainer(clf_model, X_test)
+            shap_values = explainer(X_test)
+            shap.plots.bar(shap_values)
+            shap_bar_plot_file = "shap_bar_plot_best.png"
+            plt.savefig(os.path.join(results_path, shap_bar_plot_file), format="png", bbox_inches="tight")
+            plt.close()
+
+        except Exception as e:
+            print("Error plotting SHAP bar plot:", str(e))
 
     return results_to_save
 
@@ -207,10 +269,19 @@ def main():
         num_folds,
     ) = experiment_definition(X, y, df, EXPERIMENT_PATH)
 
+    #Save the df to a pickle file and to a csv file
+    df.to_pickle(os.path.join(BEST_PATH, "df_classification.pkl"))
+    df.to_csv(os.path.join(BEST_PATH, "df_classification.csv"))
+
+    #save the features to a text list
+    with open(os.path.join(BEST_PATH, "features.txt"), "w") as f:
+        for item in features:
+            f.write("%s\n" % item)
+            
+
     print_data_info(
         X_train, X_test, y_train, y_test, features, df.drop(columns=["subjid"])
     )
-
 
     print("Starting the classification...")
 
@@ -218,26 +289,14 @@ def main():
     with open(best_model_path, "rb") as f:
         best_classifiers = pickle.load(f)
 
-    # print the type and size of the best_classifiers
-    print("Type of best_classifiers:", type(best_classifiers))
-    print("Size of best_classifiers:", len(best_classifiers))
-
     # If the tuple has a consistent format as expected
     if isinstance(best_classifiers, tuple):
-        # Unpack and examine item types
-        classifier_name, best_estimator, best_score, results = best_classifiers
+        classifier_name, best_estimator, best_score, results = best_classifiers[:4]
+        best_params = results["best_params"]
         print(f"Classifier Name: {classifier_name}")
         print(f"Best Estimator: {best_estimator}")
         print(f"Best Score: {best_score}")
-        # print(f"Additional Results: {results}")
-
-        results = best_classifiers[3]
-        best_params = results["best_params"]
-
-        print("Best Estimator:")
-        print(best_estimator)
-        print("Best Parameters:")
-        print(best_params)
+        print("Best Parameters:", best_params)
 
     # Create an imputer object with 'constant' strategy and your specified fill value
     imputer = SimpleImputer(strategy="constant", fill_value=998)
@@ -247,16 +306,13 @@ def main():
     # Transform the test data with the same imputer
     X_test = imputer.transform(X_test)
 
-    print("X_test")
-    print(X_test)
-
-    perform_classification_best(X_test, y_test, best_estimator, BEST_PATH)
+    perform_classification_best(X_test, y_test, best_estimator, BEST_PATH, features)
 
     print("Classification with the best classifier completed and results saved.")
 
-
 if __name__ == "__main__":
     main()
+
 """
 # Define the classifiers and their parameter grids
 

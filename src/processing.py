@@ -780,30 +780,6 @@ def perform_classification_best(  # it is also saving the best model results
         pickle.dump(best_estimator, f)
     print(f"Best estimator saved to {best_estimator_file}")
 
-    ## Save all relevant results to a file
-    # Save all relevant results to a file
-    results_to_save = {
-        "best_params": best_params,
-        "best_estimator": best_estimator,
-        "best_score": best_score_,
-        "cv_results": cv_results,
-        "y_pred": y_pred,
-        "y_test": y_test,
-        "classification_report": classification_report(
-            y_test, y_pred, output_dict=True
-        ),
-        "confusion_matrix": conf_matrix,
-        "importances": importances,
-        "feature_importance_data": feature_importance_data,
-    }
-    # Path to save the results
-    results_file_path = os.path.join(
-        saved_result_path_classification, "classification_results.pkl"
-    )
-    with open(results_file_path, "wb") as f:
-        pickle.dump(results_to_save, f)
-
-
 from sklearn.impute import SimpleImputer
 
 
