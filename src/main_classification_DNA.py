@@ -102,7 +102,6 @@ def load_and_prepare_data():
     else:
         print("All missing values have been successfully filled.")
 
-
     return df
 
 
@@ -151,10 +150,10 @@ def print_data_info(X_train, X_test, y_train, y_test, features, df):
 def setup_output(current_datetime):
     """Set up output redirection to a log file."""
 
-    #file_name = f"classification_reports_{current_datetime}_mrmr.txt"
-    file_name = f"classification_reports_mrmr.txt"#{current_datetime}_mrmr.txt"
+    # file_name = f"classification_reports_{current_datetime}_mrmr.txt"
+    file_name = f"classification_reports_mrmr_XGB_new.txt"  # {current_datetime}_mrmr.txt"
     sys.stdout = open(os.path.join(EXPERIMENT_PATH, file_name), "w")
-    
+
 
 # Modify this function
 def perform_classification_new(
@@ -193,7 +192,7 @@ def perform_classification_new(
         best_estimator, best_score_, results_to_save
     """
 
-    '''
+    """
 
      # Set up feature selection and pipeline
     if feature_selection_option == "mrmr":
@@ -259,34 +258,85 @@ def perform_classification_new(
         n_jobs=-1,
         return_train_score=True,
     )
+    """
+
+
+    # Initialize whether to use the feature selector
+    use_selector = False
     '''
 
-    # Setup pipeline only if feature selection is involved
-    if feature_selection_option == "mrmr":
+    # Check if feature selection should be used, assuming `mrmr` is only applicable for certain models
+    if feature_selection_option == "mrmr" and isinstance(clf_model, LightGBMClassifier):
+        print("Use the selector")
+        use_selector = True
+    '''
+
+    # Create the pipeline steps based on whether the selector is used
+    pipeline_steps = [("imputer", SimpleImputer(strategy="mean"))]
+
+    if use_selector:
         # Configure the sequential feature selector
         selector = SequentialFeatureSelector(
             estimator=clf_model, direction="forward", scoring=scorer, cv=kf, n_jobs=-1
         )
-        
-        # Create the pipeline
-        pipeline = Pipeline(
-            [
-                ("imputer", SimpleImputer(strategy="mean")),
-                ("selector", selector),
-                ("clf", clf_model),
-            ]
-        )
+        # Add selector to the pipeline steps only if applicable
+        pipeline_steps.append(("selector", selector))
 
-        # Map parameter names to the pipeline format
-        param_grid = {f"clf__{param}": values for param, values in param_grid.items()}
+    # Add classifier to the pipeline steps
+    pipeline_steps.append(("clf", clf_model))
+
+    # Create the pipeline using the specified steps
+    pipeline = Pipeline(pipeline_steps)
+
+    # Map parameter names to the pipeline format
+    param_grid = {f"clf__{param}": values for param, values in param_grid.items()}
+
+
+    # Map original hyperparameter names to pipeline format
+    if isinstance(clf_model, RandomForestClassifier):
+        new_keys = {
+            "n_estimators": "clf__n_estimators",
+            "max_depth": "clf__max_depth",
+            "min_samples_split": "clf__min_samples_split",
+            "min_samples_leaf": "clf__min_samples_leaf",
+            "max_features": "clf__max_features",
+        }
+    elif isinstance(clf_model, XGBClassifier):
+        new_keys = {
+            "max_depth": "clf__max_depth",
+            "n_estimators": "clf__n_estimators",
+            "learning_rate": "clf__learning_rate",
+            "subsample": "clf__subsample",
+            "colsample_bytree": "clf__colsample_bytree",
+            "reg_alpha": "clf__reg_alpha",
+        }
+    elif isinstance(clf_model, SVC):
+        new_keys = {
+            "C": "clf__C",
+            "gamma": "clf__gamma",
+            "kernel": "clf__kernel",
+        }
+    elif isinstance(clf_model, DecisionTreeClassifier):
+        new_keys = {
+            "max_depth": "clf__max_depth",
+            "criterion": "clf__criterion",
+            "min_samples_split": "clf__min_samples_split",
+            "min_samples_leaf": "clf__min_samples_leaf",
+            "max_features": "clf__max_features",
+        }
+    else:
+        new_keys = {k: f"clf__{k}" for k in param_grid.keys()}
+
+    # Update parameter grid to match pipeline configuration
+    param_grid = {new_keys.get(k, k): v for k, v in param_grid.items()}
 
     # Initialize GridSearchCV with the pipeline or model
     grid_search = GridSearchCV(
         estimator=pipeline if feature_selection_option == "mrmr" else clf_model,
         param_grid=param_grid,
-        cv=kf,
+        cv=kf,  # kf, #TODO PUT IT on kf
         scoring=scorer,
-        verbose=2, #TODO put on 1
+        verbose=2,  # TODO put on 1
         n_jobs=-1,
         return_train_score=True,
     )
@@ -302,8 +352,8 @@ def perform_classification_new(
     cv_results = grid_search.cv_results_
 
     # Evaluate on the test set
-    #y_pred = best_estimator.predict(X_test)
-    #conf_matrix = confusion_matrix(y_test, y_pred)
+    # y_pred = best_estimator.predict(X_test)
+    # conf_matrix = confusion_matrix(y_test, y_pred)
 
     # Store results
     results_to_save = {
@@ -311,12 +361,12 @@ def perform_classification_new(
         "best_estimator": best_estimator,
         "best_score": best_score_,
         "cv_results": cv_results,
-        #"y_pred": y_pred,
+        # "y_pred": y_pred,
         "y_test": y_test,
-        #"classification_report": classification_report(
-            #y_test, y_pred, output_dict=True
-        #),
-        #"confusion_matrix": conf_matrix,
+        # "classification_report": classification_report(
+        # y_test, y_pred, output_dict=True
+        # ),
+        # "confusion_matrix": conf_matrix,
     }
 
     # Create results directory if needed and save pickle
@@ -359,8 +409,44 @@ def main():
 
     # input("Press Enter to start the classification...")
 
-    
     print("Starting the classification...")
+
+    """
+    classifiers = {
+        "DecisionTreeClassifier": (
+            DecisionTreeClassifier(),
+            {
+                "max_depth": [None, 10, 20],  # Key depths including no limit
+                "min_samples_split": [2, 10],  # Sparing values
+                "min_samples_leaf": [1, 4],  # Only two options to compare leaf sizes
+                "criterion": ["gini", "entropy"],  # Two main impurity measures
+                "max_features": [None, "sqrt"],  # Two useful options
+                "splitter": ["best"],  # Default and commonly useful setting
+            },
+        ),
+        "RandomForestClassifier": (
+            RandomForestClassifier(),
+            {
+                "n_estimators": [100, 300],  # Key sizes of forests
+                "max_depth": [None, 20],  # Either unconstrained or some constraint
+                "min_samples_split": [2, 10],  # Common divisors
+                "min_samples_leaf": [1, 3],  # Two simple leaves
+                "max_features": [None, "sqrt"],  # Reduce features considered per split
+                "bootstrap": [True],  # Most typical setting
+                "criterion": ["gini"],  # Focus on gini
+            },
+        ),
+        "SVM": (
+            SVC(),
+            {
+                "C": [0.1, 1, 10],  # Simplified C range
+                "gamma": [0.01, 0.1],  # Simplified gamma range
+                "kernel": ["rbf"],  # Broadly useful and performant kernel
+            },
+        ),
+    }
+    """
+
 
     classifiers = {
     "XGBClassifier": (
@@ -375,39 +461,7 @@ def main():
             "reg_lambda": [1, 2]  # Just two prominent values
         },
     ),
-    "DecisionTreeClassifier": (
-        DecisionTreeClassifier(),
-        {
-            "max_depth": [None, 10, 20],  # Key depths including no limit
-            "min_samples_split": [2, 10],  # Sparing values
-            "min_samples_leaf": [1, 4],  # Only two options to compare leaf sizes
-            "criterion": ["gini", "entropy"],  # Two main impurity measures
-            "max_features": ["auto", "sqrt"],  # Two useful options
-            "splitter": ["best"],  # Default and commonly useful setting
-        },
-    ),
-    "RandomForestClassifier": (
-        RandomForestClassifier(),
-        {
-            "n_estimators": [100, 300],  # Key sizes of forests
-            "max_depth": [None, 20],  # Either unconstrained or some constraint
-            "min_samples_split": [2, 10],  # Common divisors
-            "min_samples_leaf": [1, 3],  # Two simple leaves
-            "max_features": ["auto", "sqrt"],  # Reduce features considered per split
-            "bootstrap": [True],  # Most typical setting
-            "criterion": ["gini"],  # Focus on gini
-        },
-    ),
-    "SVM": (
-        SVC(),
-        {
-            "C": [0.1, 1, 10],  # Simplified C range
-            "gamma": [0.01, 0.1],  # Simplified gamma range
-            "kernel": ["rbf"],  # Broadly useful and performant kernel
-        },
-    ),
     }
-    
 
     # define the settings of the experiment
     balancing_techniques = [
@@ -415,9 +469,8 @@ def main():
         "over",
         "under",
     ]
-    #feature_selection_options = ["no", "pca", "select_from_model", "rfe"] #,MRMR
-    feature_selection_options = ["mrmr"] #,MRMR
-
+    # feature_selection_options = ["no", "pca", "select_from_model", "rfe"] #,MRMR
+    feature_selection_options = ["mrmr"]  # ,MRMR
 
     # List to hold results of classifiers
     best_classifiers = []
@@ -428,7 +481,7 @@ def main():
         pipeline = Pipeline([("clf", clf_model)])  # Create pipeline to clf
 
         # Create an imputer object with 'constant' strategy and your specified fill value
-        imputer = SimpleImputer(strategy='constant', fill_value=998)
+        imputer = SimpleImputer(strategy="constant", fill_value=998)
 
         # Fit the imputer on the training data and transform it
         X_train = imputer.fit_transform(X_train)
@@ -436,13 +489,14 @@ def main():
         # Transform the test data with the same imputer
         X_test = imputer.transform(X_test)
 
+        """
         #Decrease
         samples=30
         X_train = X_train[ :samples, :]
         X_test = X_test[:samples,:]
         y_train = y_train[:samples]
         y_test = y_test[:samples]
-
+        """
 
         for feature_selection_option in feature_selection_options:
             (
@@ -514,7 +568,9 @@ def main():
                 print("End of training")
                 print("------------------------------------------------------------\n")
 
-    results_file_path = os.path.join(EXPERIMENT_PATH, f"all_classifiers_{current_datetime}.pkl")
+    results_file_path = os.path.join(
+        EXPERIMENT_PATH, f"all_classifiers_{current_datetime}.pkl"
+    )
     with open(results_file_path, "wb") as f:
         pickle.dump(best_classifiers, f)
     print(f"Results saved to {results_file_path}")
@@ -530,7 +586,9 @@ def main():
     print(f"Best Score: {best_classifier[2]}")
     print(f"Best Estimator: {best_classifier[1]}")
 
-    results_file_path = os.path.join(EXPERIMENT_PATH, f"best_classifier_{current_datetime}.pkl")
+    results_file_path = os.path.join(
+        EXPERIMENT_PATH, f"best_classifier_{current_datetime}.pkl"
+    )
     with open(results_file_path, "wb") as f:
         pickle.dump(best_classifier, f)
 

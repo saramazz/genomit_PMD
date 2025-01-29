@@ -32,12 +32,14 @@ if not API_KEY:
 print(API_KEY)
 
 # Define paths
+# Paths setup
 script_directory = os.path.dirname(os.path.abspath(__file__))
 parent_path = os.path.dirname(script_directory)
-global_path = os.path.dirname(parent_path)
+GLOBAL_PATH = os.path.dirname(parent_path)
 
-saved_result_path = os.path.join(global_path, "saved_results")
-saved_result_path_survey = os.path.join(saved_result_path, "survey")
+
+saved_result_path = os.path.join(GLOBAL_PATH, "saved_results")
+SURVEY_PATH = os.path.join(saved_result_path, "survey")
 
 
 """
@@ -45,7 +47,7 @@ LOAD DATA
 """
 
 df_path = os.path.join(
-    saved_result_path_survey, "df_test_human_friendly_best.csv"
+    SURVEY_PATH, "df_test_human_friendly_best.csv"
 )  # description of the patients in a human friendly way
 df = pd.read_csv(df_path)
 
@@ -97,12 +99,13 @@ for index, row in df.iterrows():
     process_patient_data(patient_number=index, patient_data=row)
 
 # Save the results to a CSV file
-# output_path = os.path.join(saved_result_path_survey, f"processed_patient_data_human_friendly_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv")
-output_path = os.path.join(
-    saved_result_path_survey, f"description_patient_data_test_set.csv"
-)
+# output_path = os.path.join(SURVEY_PATH, f"processed_patient_data_human_friendly_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv")
+output_path = os.path.join(SURVEY_PATH, f"description_patient_data_test_set.csv")
+
 
 results_df = pd.DataFrame(results)
+# Substitute ": 0" with ": No" in the description
+results_df["description"] = results_df["description"].str.replace(": 0", ": No")
 results_df.to_csv(output_path, index=False)
 
 print(f"Results saved to {output_path}")
@@ -192,9 +195,7 @@ def process_data_and_save(df, output_path):
     return result
 
 
-output_path = os.path.join(
-    saved_result_path_survey, f"description_patient_data_test_set_llm.csv"
-)
+output_path = os.path.join(SURVEY_PATH, f"description_patient_data_test_set_llm.csv")
 
 
 proceed = input("Do you want to proceed with the approach LLM? (y/n): ")
@@ -208,7 +209,7 @@ result = process_data_and_save(df, output_path)
 
 # save in a log file the details of the number of patients, model used, max tokens and the time of the run
 log_file_path = os.path.join(
-    saved_result_path_survey, "log_file_description_patient_data_test_set_llm.txt"
+    SURVEY_PATH, "log_file_description_patient_data_test_set_llm.txt"
 )
 with open(log_file_path, "w") as log_file:
     log_file.write(f"Number of patients: {len(df)}\n")

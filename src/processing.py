@@ -76,9 +76,8 @@ from utilities import *
 from plotting import *
 from preprocessing import *
 
-#import PCA
+# import PCA
 from sklearn.decomposition import PCA
-
 
 
 # %% Feature ranking on the training set using cross-validation
@@ -135,7 +134,9 @@ def rankfeatures(X_train, Y_train, frmethod, nFolds, nFeatures, thr, kf):
 
     sorted_scores = np.argsort(feature_scores[:, 1])[::-1]
     # top_features = feature_scores[sorted_scores[:4], 0]
-    top_features = feature_scores[sorted_scores[: int(thr * X_train.shape[1])], 0]
+    top_features = feature_scores[
+        sorted_scores[: (int(thr * X_train.shape[1]))], 0
+    ]  # TODO XGB had thr/2 modify it
     # top_features = feature_scores[sorted_scores[:nFeatures], 0]
 
     print("Top 25% Features:")
@@ -182,7 +183,7 @@ def process_gendna_column(df):
 
     # Count the NaN values in the 'gendna' column
     nan_count = df["gendna"].isna().sum()
-    #print(f"Number of NaN values in '{column}': {nan_count}")
+    # print(f"Number of NaN values in '{column}': {nan_count}")
 
     # Save patients with NaN 'gendna' information to a file
     file_path = os.path.join(
@@ -206,8 +207,8 @@ def process_gendna_column(df):
         index=False,
     )
     # print the dimension of the file
-    #print("Patients with NaN or 1 'gendna' information saved to:", file_path)
-    #print("Dimension of the file:", patients_with_nan_gendna.shape)
+    # print("Patients with NaN or 1 'gendna' information saved to:", file_path)
+    # print("Dimension of the file:", patients_with_nan_gendna.shape)
 
     # Drop NaN values from 'gendna' column
     df_non_nan = df.dropna(subset=["gendna"])
@@ -216,8 +217,8 @@ def process_gendna_column(df):
     df_non_nan = df_non_nan[df_non_nan["gendna"] != 1]
 
     # print the number of rows removed and the new number of rows
-    #print(f"Number of rows removed: {len(df) - len(df_non_nan)}")
-    #print(f"New number of rows: {len(df_non_nan)}")
+    # print(f"Number of rows removed: {len(df) - len(df_non_nan)}")
+    # print(f"New number of rows: {len(df_non_nan)}")
 
     # Create 'nDNA' and 'mtDNA' classes
     df_non_nan["nDNA"] = df_non_nan["gendna"].apply(
@@ -393,7 +394,7 @@ def experiment_definition(X, y, X_df, saving_path, num_folds=5):
             "X_train": X_train_df.drop(columns=["subjid"]).values,
             "y_train": y_train.values,
             "num_folds": num_folds,
-            "nFeatures": 15,
+            "nFeatures": 25,
             "thr": 0.25,
             "train_subjects": X_train_df["subjid"].values,
             "test_subjects": X_test_df["subjid"].values,
@@ -425,7 +426,6 @@ def experiment_definition(X, y, X_df, saving_path, num_folds=5):
         classifier_config["nFeatures"],
         classifier_config["num_folds"],
     )
-
 
 
 """
@@ -940,8 +940,7 @@ def process_feature_selection(
     param_grid_selected = param_grid
     pipeline_selected = pipeline
 
-    #Remove missing values
-
+    # Remove missing values
 
     if feature_selection == "pca":
         print("Starting PCA")
@@ -998,45 +997,49 @@ def process_feature_selection(
         top_feature_indices_mrmr = rankfeatures(
             X_train, y_train, "mrmr", num_folds, nFeatures, thr, kf
         )
-
         selectedFeatures_mrmr = []
-        for subset_size in range(
-            len(top_feature_indices_mrmr) - 1, len(top_feature_indices_mrmr) + 1
-        ):
-            feature_combinations_mrmr = list(
-                combinations(top_feature_indices_mrmr, subset_size)
-            )
+        for subset_size in range(len(top_feature_indices_mrmr) - 1, len(top_feature_indices_mrmr) + 1):
+            feature_combinations_mrmr = list(combinations(top_feature_indices_mrmr, subset_size))
             selectedFeatures_mrmr.extend(feature_combinations_mrmr)
-
+        
         print("Top " + str(thr * 100) + "% Feature Indices:", top_feature_indices_mrmr)
-
         selectedFeatures = selectedFeatures_mrmr
         selectedFeatures_name = [features[i] for i in selectedFeatures[-1]]
         print("selected Features names", selectedFeatures_name)
 
-        # create subsets of features for BACKWARD RANKING
+        # Create subsets of features for the final model
         selectedFeatures_set = selectedFeatures[-1]
         X_train_selected = X_train[:, selectedFeatures_set]
         X_test_selected = X_test[:, selectedFeatures_set]
-
         print("Selected Features of Subsets:", selectedFeatures_set)
 
-        selector = SequentialFeatureSelector(
-            clf_model, direction="backward", scoring=scorer, cv=kf, n_jobs=-1
-        )
-
-        # update parameter grid:
-        param_grid_selected = {
-            **param_grid,
-            "selector__n_features_to_select": range(1, len(X_train_selected[0]) + 1),
-        }  # Limit the number of features to select}
-        pipeline_selected = Pipeline(
-            [
+        # Check if the model is tree-based, which does not require SequentialFeatureSelector
+        if isinstance(clf_model, (DecisionTreeClassifier, RandomForestClassifier,SVC)):
+            # Tree-based models often do not require explicit feature selection
+            pipeline_selected = Pipeline([
+                ("imputer", SimpleImputer(strategy="mean")),
+                ("clf", clf_model)
+            ])
+        else:
+            # Use SequentialFeatureSelector for non-tree-based models
+            selector = SequentialFeatureSelector(
+                clf_model,
+                direction="backward",
+                scoring=scorer,
+                cv=kf,
+                n_jobs=-1
+            )
+            
+            param_grid_selected = {
+                **param_grid,
+                "selector__n_features_to_select": range(1, len(X_train_selected[0]) + 1),
+            }
+            
+            pipeline_selected = Pipeline([
                 ("imputer", SimpleImputer(strategy="mean")),
                 ("selector", selector),
                 ("clf", clf_model),
-            ]
-        )
+            ])
     elif feature_selection == "select_from_model":
         print("Feature selection using SelectFromModel...")
         try:
@@ -1055,24 +1058,27 @@ def process_feature_selection(
 
         except Exception as e:
             print(f"Error during feature selection: {e}")
-            print("Falling back to default configuration (no feature selection applied).")
-            
+            print(
+                "Falling back to default configuration (no feature selection applied)."
+            )
+
             # Nessuna selezione di feature applicata
             X_train_selected = X_train
             X_test_selected = X_test
             param_grid_selected = param_grid
-            pipeline_selected = pipeline 
-
+            pipeline_selected = pipeline
 
     elif feature_selection == "rfe":
         print("Feature selection using Recursive Feature Elimination (RFE)...")
         try:
-            selector = RFE(estimator=clf_model, n_features_to_select=nFeatures, step=5) #step to reduce the number of features
-            
+            selector = RFE(
+                estimator=clf_model, n_features_to_select=nFeatures, step=5
+            )  # step to reduce the number of features
+
             X_train_selected = selector.fit_transform(X_train, y_train)
 
             X_test_selected = selector.transform(X_test)
-            #Remove the column subjid
+            # Remove the column subjid
             X_df = X_df.drop(columns=["subjid"])
             selected_features = X_df.columns[selector.get_support()]
             print("Selected Features:")
@@ -1080,13 +1086,15 @@ def process_feature_selection(
             print("Number of Selected Features:", len(selected_features))
         except Exception as e:
             print(f"Error during feature selection: {e}")
-            print("Falling back to default configuration (no feature selection applied).")
-            
+            print(
+                "Falling back to default configuration (no feature selection applied)."
+            )
+
             # Nessuna selezione di feature applicata
             X_train_selected = X_train
             X_test_selected = X_test
             param_grid_selected = param_grid
-            pipeline_selected = pipeline 
+            pipeline_selected = pipeline
 
     else:
         # No feature selection applied
@@ -1094,6 +1102,5 @@ def process_feature_selection(
         X_test_selected = X_test
         param_grid_selected = param_grid
         pipeline_selected = pipeline
-    
 
     return X_train_selected, X_test_selected, param_grid_selected, pipeline_selected

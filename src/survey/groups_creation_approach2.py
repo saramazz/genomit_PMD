@@ -1,3 +1,7 @@
+"""
+Script to create groups for the survey and save in clinitian_patient_mapping.csv
+"""
+
 import os
 import pandas as pd
 import numpy as np
@@ -19,18 +23,24 @@ DATA IMPORT AND INITIALIZATION
 # Paths setup
 script_directory = os.path.dirname(os.path.abspath(__file__))
 parent_path = os.path.dirname(script_directory)
-global_path = os.path.dirname(parent_path)
+GLOBAL_PATH = os.path.dirname(parent_path)
 
-saved_result_path = os.path.join(global_path, "saved_results")
-saved_result_path_survey = os.path.join(saved_result_path, "survey")
 
-df_path = os.path.join(saved_result_path, "df", "df_preprocessed_Global.pkl")
-df_test_path = os.path.join(saved_result_path_survey, "df_test_best.xlsx")
-important_vars_path = os.path.join(global_path, "data", "important_variables.xlsx")
+saved_result_path = os.path.join(GLOBAL_PATH, "saved_results")
+SURVEY_PATH = os.path.join(saved_result_path, "survey")
+
+groups_path = os.path.join(SURVEY_PATH, "clinician_patient_mapping.csv")
+
+
+df_path = os.path.join(saved_result_path, "df", "df_Global_preprocessed.csv")
+df_test_path = os.path.join(SURVEY_PATH, "df_test_best.xlsx")
+important_vars_path = os.path.join(
+    GLOBAL_PATH, "variables_mapping", "important_variables.xlsx"
+)
 
 # Load main DataFrame
 try:
-    df_raw = pd.read_pickle(df_path)
+    df_raw = pd.read_csv(df_path)
     print(f"Loaded DataFrame: {df_path}")
 except FileNotFoundError:
     print(f"Error: File not found at {df_path}")
@@ -156,8 +166,8 @@ df = df_raw.drop(columns=columns_to_drop, errors="ignore").fillna(
 print(f"Cleaned DataFrame dimensions: {df.shape}")
 print("Columns after cleaning:", df.columns)
 
-"""
-#CREATE GROUPS FOR SURVEY
+
+# CREATE GROUPS FOR SURVEY
 
 # create a list of id for the clinicians, from 0 to 39: 0,19 experts, 20,39 non-experts
 clinicians_expert = range(20)
@@ -305,48 +315,52 @@ def balance_patients(clinician_to_patients, df, target_total=40):
     return clinician_to_patients
 
 
-# Balance patients for each clinician
-balanced_clinician_to_patients = balance_patients(clinician_to_patients, df)
+# check if groups_path = os.path.join(SURVEY_PATH, "clinician_patient_mapping.csv") exixt, orherwise proceed:
 
-# Final counts and output
-for clinician, patients in balanced_clinician_to_patients.items():
-    final_df = df[df["subjid"].isin(patients)]
-    num_young = len(final_df[final_df["patient_class"] == "young"])
-    num_adult = len(final_df[final_df["patient_class"] == "adult"])
-    print(
-        f"Clinician {clinician}: Total Patients={len(patients)}, Young={num_young}, Adults={num_adult}"
-    )
+if os.path.exists(groups_path):
+    print(f"File already exists: {groups_path}")
+    exit()
+else:
+    print(f"File does not exist: {groups_path}")
+    print("Proceeding with the creation of the groups...")
+    # Balance patients for each clinician
+    balanced_clinician_to_patients = balance_patients(clinician_to_patients, df)
 
-#print the final clinician_to_patients
-for clinician, patients in balanced_clinician_to_patients.items():
-    print(f"Clinician {clinician}: {patients}")
+    # Final counts and output
+    for clinician, patients in balanced_clinician_to_patients.items():
+        final_df = df[df["subjid"].isin(patients)]
+        num_young = len(final_df[final_df["patient_class"] == "young"])
+        num_adult = len(final_df[final_df["patient_class"] == "adult"])
+        print(
+            f"Clinician {clinician}: Total Patients={len(patients)}, Young={num_young}, Adults={num_adult}"
+        )
 
-#save the result to a csv file, foe each clinician, the list of patients assigned to him
-output = []
-for clinician, patients in balanced_clinician_to_patients.items():
-    for subjid in patients:
-        output.append({"clinician_id": clinician, "subjid": subjid})
-# order by clinician id
-output = sorted(output, key=lambda x: x["clinician_id"])
-#save the result to a csv file
-output_df = pd.DataFrame(output)
-#date and time
-now = datetime.now()
-dt_string = now.strftime("%Y%m%d_%H%M%S")
-#add the date and time to the file name
-file_name = f"clinician_patient_mapping_{dt_string}.csv"
-output_df.to_csv(
-    os.path.join(saved_result_path_survey, file_name), index=False
-)
+    # print the final clinician_to_patients
+    for clinician, patients in balanced_clinician_to_patients.items():
+        print(f"Clinician {clinician}: {patients}")
 
-"""
+    # save the result to a csv file, foe each clinician, the list of patients assigned to him
+    output = []
+    for clinician, patients in balanced_clinician_to_patients.items():
+        for subjid in patients:
+            output.append({"clinician_id": clinician, "subjid": subjid})
+    # order by clinician id
+    output = sorted(output, key=lambda x: x["clinician_id"])
+    # save the result to a csv file
+    output_df = pd.DataFrame(output)
+    # date and time
+    now = datetime.now()
+    dt_string = now.strftime("%Y%m%d_%H%M%S")
+    # add the date and time to the file name
+    file_name = f"clinician_patient_mapping.csv"
+    output_df.to_csv(os.path.join(SURVEY_PATH, file_name), index=False)
+    print(f"Saved clinician-patient mapping to: {os.path.join(SURVEY_PATH, file_name)}")
+
+
 """
 CHECK THE FINAL RESULT
 """
-# Paths setup
-
-# load data:
-groups_path = os.path.join(saved_result_path_survey, "clinician_patient_mapping.csv")
+print("Checking the final result...")
 df = pd.read_csv(groups_path)
 
 # print the dimension and the columns names of the data

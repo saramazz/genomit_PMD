@@ -20,20 +20,21 @@ current_file = os.path.basename(__file__)
 print("the current file is: ", current_file)
 script_directory = os.path.dirname(os.path.abspath(__file__))
 parent_path = os.path.dirname(script_directory)
-global_path = os.path.dirname(parent_path)
+GLOBAL_PATH = os.path.dirname(parent_path)
 
-saved_result_path = os.path.join(global_path, "saved_results")
-saved_result_path_survey = os.path.join(saved_result_path, "survey")
 
-df_path = os.path.join(saved_result_path, "df", "df_preprocessed_Global.pkl")
-df_test_path = os.path.join(saved_result_path_survey, "df_test_best.xlsx")
+saved_result_path = os.path.join(GLOBAL_PATH, "saved_results")
+SURVEY_PATH = os.path.join(saved_result_path, "survey")
 
-# load data:
-important_vars_path = os.path.join(global_path, "data", "important_variables.xlsx")
 
+df_path = os.path.join(saved_result_path, "df", "df_Global_preprocessed.csv")
+df_test_path = os.path.join(SURVEY_PATH, "df_test_best.xlsx")
+important_vars_path = os.path.join(
+    GLOBAL_PATH, "variables_mapping", "important_variables_huma.xlsx"
+)
 # Load main DataFrame
 try:
-    df_raw = pd.read_pickle(df_path)
+    df_raw = pd.read_csv(df_path)
     print(f"Loaded DataFrame: {df_path}")
 except FileNotFoundError:
     print(f"Error: File not found at {df_path}")
@@ -445,6 +446,9 @@ print(df)
 
 # save in csv the resultin df_test
 df.to_csv(
-    os.path.join(saved_result_path_survey, "df_test_human_friendly_best.csv"),
+    os.path.join(SURVEY_PATH, "df_test_human_friendly_best.csv"),
     index=False,
 )
+
+#print that the df_test was saved
+print("df_test saved in csv as df_test_human_friendly_best.csv in the survey folder") 
