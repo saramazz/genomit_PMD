@@ -92,8 +92,12 @@ def load_and_prepare_data():
     df, df_not_numerical = process_gendna_column(df)
     df = fill_missing_values(df)
 
-    # Fill the remaining missing values with 998
-    df = df.fillna(998)
+    mt_DNA_patients = df[df["gendna_type"] == 0]
+    #print("Number of mtDNA patients:", mt_DNA_patients.shape[0])
+    #print("mtDNA patients:", mt_DNA_patients["subjid"].values)
+
+    # Fill the remaining missing values with -998
+    df = df.fillna(-998)
 
     # Check if there are any remaining missing values
     missing_count = df.isnull().sum().sum()
@@ -104,7 +108,7 @@ def load_and_prepare_data():
     else:
         print("All missing values have been successfully filled.")
 
-    return df
+    return df, mt_DNA_patients
 
 
 def feature_selection(df):
@@ -146,6 +150,9 @@ def print_data_info(X_train, X_test, y_train, y_test, features, df):
     print("Dimension of X_test:", X_test.shape)
     print("Dimension of y_train:", y_train.shape)
     print("Dimension of y_test:", y_test.shape)
+    # print the distribution of the target variable
+    print("Distribution of the target variable:")
+    print(Counter(y_test))
     print("Features names:", features)
 
 
@@ -157,9 +164,9 @@ def setup_output(current_datetime):
 
 
 def perform_classification_best(X_test, y_test, clf_model, results_path, features):
-    '''
+    """
     Function to predict on the test set and print the classification results and plots
-    '''
+    """
 
     # Evaluate on the test set
     y_pred = clf_model.predict(X_test)
@@ -172,21 +179,27 @@ def perform_classification_best(X_test, y_test, clf_model, results_path, feature
     # Check if the model has feature importances
     if hasattr(clf_model, "feature_importances_"):
         importances = clf_model.feature_importances_
-        feature_importances = {features[i]: importances[i] for i in range(len(importances))}
+        feature_importances = {
+            features[i]: importances[i] for i in range(len(importances))
+        }
         indices_all = np.argsort(importances)  # Sort indices by importance
         feature_importance_data = {
             "feature_importances": feature_importances,
             "top_10_features": {features[i]: importances[i] for i in indices_all[-10:]},
         }
     else:
-        importances = np.array([])  # handle cases where feature importances are not available
+        importances = np.array(
+            []
+        )  # handle cases where feature importances are not available
         feature_importance_data = {}
 
     # Save all relevant results to a file
     results_to_save = {
         "confusion_matrix": conf_matrix,
         "accuracy": accuracy,
-        "classification_report": classification_report(y_test, y_pred, output_dict=True),
+        "classification_report": classification_report(
+            y_test, y_pred, output_dict=True
+        ),
         "y_pred": y_pred,
         "y_test": y_test,
         "importances": importances,
@@ -207,7 +220,9 @@ def perform_classification_best(X_test, y_test, clf_model, results_path, feature
     # Plot Confusion Matrix
     print("Plotting Confusion Matrix...")
     confusion_matrix_file = "cm_best_model.png"
-    plot_confusion_matrix(y_test, y_pred, os.path.join(results_path, confusion_matrix_file))
+    plot_confusion_matrix(
+        y_test, y_pred, os.path.join(results_path, confusion_matrix_file)
+    )
     plt.close()
 
     # Plot Importances if available
@@ -215,21 +230,49 @@ def perform_classification_best(X_test, y_test, clf_model, results_path, feature
         print("Calculating and Plotting Importances...")
         plt.figure(figsize=(10, 8))
         plt.title("All feature Importances", fontsize=15)
-        plt.barh(range(len(indices_all)), importances[indices_all], color="lightblue", align="center")
-        plt.yticks(range(len(indices_all)), [features[i] for i in indices_all], ha="right", fontsize=10)
+        plt.barh(
+            range(len(indices_all)),
+            importances[indices_all],
+            color="lightblue",
+            align="center",
+        )
+        plt.yticks(
+            range(len(indices_all)),
+            [features[i] for i in indices_all],
+            ha="right",
+            fontsize=10,
+        )
         plt.xlabel("Relative Importance", fontsize=15)
         feature_importance_file = "feature_imp_best_ALL.png"
-        plt.savefig(os.path.join(results_path, feature_importance_file), format="png", bbox_inches="tight")
+        plt.savefig(
+            os.path.join(results_path, feature_importance_file),
+            format="png",
+            bbox_inches="tight",
+        )
         plt.close()
 
         # Plot ONLY top 10 feature importances
         plt.figure(figsize=(10, 8))
         plt.title("Top 10 Feature Importances", fontsize=15)
-        plt.barh(range(len(indices_all[-10:])), importances[indices_all[-10:]], color="lightblue", align="center")
-        plt.yticks(range(len(indices_all[-10:])), [features[i] for i in indices_all[-10:]], ha="right", fontsize=10)
+        plt.barh(
+            range(len(indices_all[-10:])),
+            importances[indices_all[-10:]],
+            color="lightblue",
+            align="center",
+        )
+        plt.yticks(
+            range(len(indices_all[-10:])),
+            [features[i] for i in indices_all[-10:]],
+            ha="right",
+            fontsize=10,
+        )
         plt.xlabel("Relative Importance", fontsize=15)
         feature_importance_file = "feature_imp_best_10.png"
-        plt.savefig(os.path.join(results_path, feature_importance_file), format="png", bbox_inches="tight")
+        plt.savefig(
+            os.path.join(results_path, feature_importance_file),
+            format="png",
+            bbox_inches="tight",
+        )
         plt.close()
 
     # Plot SHAP Bar plot if possible
@@ -239,7 +282,11 @@ def perform_classification_best(X_test, y_test, clf_model, results_path, feature
             shap_values = explainer(X_test)
             shap.plots.bar(shap_values)
             shap_bar_plot_file = "shap_bar_plot_best.png"
-            plt.savefig(os.path.join(results_path, shap_bar_plot_file), format="png", bbox_inches="tight")
+            plt.savefig(
+                os.path.join(results_path, shap_bar_plot_file),
+                format="png",
+                bbox_inches="tight",
+            )
             plt.close()
 
         except Exception as e:
@@ -252,7 +299,8 @@ def main():
     current_datetime = datetime.now().strftime("%Y%m%d_%H%M%S")
     setup_output(current_datetime)
     # Load and preprocess data
-    df = load_and_prepare_data()
+    df, mt_DNA_patients = load_and_prepare_data()
+
     X, y = feature_selection(df)
     (
         X_train,
@@ -267,19 +315,16 @@ def main():
         thr,
         nFeatures,
         num_folds,
-    ) = experiment_definition(X, y, df, EXPERIMENT_PATH)
+    ) = experiment_definition(X, y, df, EXPERIMENT_PATH, mt_DNA_patients)
 
-    #Save the df to a pickle file and to a csv file
+    # Save the df to a pickle file and to a csv file
     df.to_pickle(os.path.join(BEST_PATH, "df_classification.pkl"))
     df.to_csv(os.path.join(BEST_PATH, "df_classification.csv"))
 
-
-
-    #save the features to a text list
+    # save the features to a text list
     with open(os.path.join(BEST_PATH, "features.txt"), "w") as f:
         for item in features:
             f.write("%s\n" % item)
-            
 
     print_data_info(
         X_train, X_test, y_train, y_test, features, df.drop(columns=["subjid"])
@@ -311,6 +356,7 @@ def main():
     perform_classification_best(X_test, y_test, best_estimator, BEST_PATH, features)
 
     print("Classification with the best classifier completed and results saved.")
+
 
 if __name__ == "__main__":
     main()

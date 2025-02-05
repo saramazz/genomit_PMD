@@ -90,8 +90,12 @@ def load_and_prepare_data():
     df, df_not_numerical = process_gendna_column(df)
     df = fill_missing_values(df)
 
-    # Fill the remaining missing values with 998
-    df = df.fillna(998)
+    mt_DNA_patients = df[df["gendna_type"] == 0]
+    #print("Number of mtDNA patients:", mt_DNA_patients.shape[0])
+    #print("mtDNA patients:", mt_DNA_patients["subjid"].values)
+
+    # Fill the remaining missing values with -998
+    df = df.fillna(-998)
 
     # Check if there are any remaining missing values
     missing_count = df.isnull().sum().sum()
@@ -102,7 +106,7 @@ def load_and_prepare_data():
     else:
         print("All missing values have been successfully filled.")
 
-    return df
+    return df, mt_DNA_patients
 
 
 def feature_selection(df):
@@ -151,7 +155,7 @@ def setup_output(current_datetime):
     """Set up output redirection to a log file."""
 
     # file_name = f"classification_reports_{current_datetime}_mrmr.txt"
-    file_name = f"classification_reports_mrmr_XGB_new.txt"  # {current_datetime}_mrmr.txt"
+    file_name = f"classification_reports_no_mrmr.txt"  # {current_datetime}_mrmr.txt"
     sys.stdout = open(os.path.join(EXPERIMENT_PATH, file_name), "w")
 
 
@@ -386,7 +390,7 @@ def main():
     current_datetime = datetime.now().strftime("%Y%m%d_%H%M%S")
     setup_output(current_datetime)
     # Load and preprocess data
-    df = load_and_prepare_data()
+    df, mt_DNA_patients = load_and_prepare_data()
     X, y = feature_selection(df)
     (
         X_train,
@@ -401,7 +405,7 @@ def main():
         thr,
         nFeatures,
         num_folds,
-    ) = experiment_definition(X, y, df, EXPERIMENT_PATH)
+    ) = experiment_definition(X, y, df, EXPERIMENT_PATH,mt_DNA_patients)
 
     print_data_info(
         X_train, X_test, y_train, y_test, features, df.drop(columns=["subjid"])
@@ -411,8 +415,20 @@ def main():
 
     print("Starting the classification...")
 
-    """
+
     classifiers = {
+     "XGBClassifier": (
+        XGBClassifier(),
+        {
+            "max_depth": [3, 6, 9],  # Reduced range
+            "n_estimators": [50, 150, 250],  # Fewer values
+            "learning_rate": [0.01, 0.1],  # Key learning rates
+            "subsample": [0.8, 1.0],  # Essential subsample rates
+            "colsample_bytree": [0.8, 1.0],  # Two core options
+            "reg_alpha": [0, 0.1],  # Reduced scrutiny on regularization
+            "reg_lambda": [1, 2]  # Just two prominent values
+        },
+    ),
         "DecisionTreeClassifier": (
             DecisionTreeClassifier(),
             {
@@ -445,9 +461,9 @@ def main():
             },
         ),
     }
-    """
 
 
+    '''
     classifiers = {
     "XGBClassifier": (
         XGBClassifier(),
@@ -462,6 +478,7 @@ def main():
         },
     ),
     }
+    '''
 
     # define the settings of the experiment
     balancing_techniques = [
@@ -469,8 +486,8 @@ def main():
         "over",
         "under",
     ]
-    # feature_selection_options = ["no", "pca", "select_from_model", "rfe"] #,MRMR
-    feature_selection_options = ["mrmr"]  # ,MRMR
+    feature_selection_options = ["no", "pca", "select_from_model", "rfe"] #,MRMR
+    #feature_selection_options = ["mrmr"]  # ,MRMR
 
     # List to hold results of classifiers
     best_classifiers = []

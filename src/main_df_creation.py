@@ -50,7 +50,7 @@ hospital_names = [folder for folder in folders if folder not in folders_to_remov
 print(f"Number of hospitals: {len(hospital_names)}")
 print("Hospital names:", hospital_names)
 
-input("Press Enter to proceed with the script...")
+#input("Press Enter to proceed with the script...")
 
 
 print("Creating DataFrame for all hospitals...")
@@ -284,6 +284,26 @@ mapping_abnormalities_path = os.path.join(
 )
 df = add_abnormalities_cols(df, mapping_abnormalities_path, mapping_symptoms_path)
 
+#print the dimension of the df before adding the patients from the export of 06/2024
+nRow, nCol = df.shape
+print(f"DataFrame dimensions before adding patients from the export of 06/2024: {nRow} rows, {nCol} columns")
+
+#Add patients from the export of 06/2024
+df_export = pd.read_excel(os.path.join(saved_result_path, "df_Global_202406.xlsx"))
+#remove the hospital name from the subjid column
+df_export["subjid"] = df_export["subjid"].apply(lambda x: x.split("_")[0])
+
+#check if there are patients in the df_export that are not in the df and print how many
+patients_not_in_df = df_export[~df_export["subjid"].isin(df["subjid"])]
+print(f"Patients in the df_export that are not in the df: {patients_not_in_df['subjid'].nunique()}")
+#add the patientspatients_not_in_df from the df_export to the df
+df = pd.concat([df, patients_not_in_df], ignore_index=True)
+
+#print the number of patients in the df
+print(f"Total unique 'subjid' in final_df: {df['subjid'].nunique()}")
+
+#input("Press Enter to proceed with the script...")
+
 print("Ordering columns alphabetically...")
 df = order_columns_alphabetically(df, ["Hospital", "subjid", "visdat"])
 
@@ -332,7 +352,6 @@ df_num.to_csv(saved_result_path + "/df_Global_num.csv", index=False)
 
 print("Plotting missing values...")
 plot_missing_values(
-    df, os.path.join(global_path, "saved_results/distribution_variables","Histogram_MissingValues_df_Global.png" )
-)
+    df, os.path.join(global_path, "saved_results/distribution_variables"),"Histogram_MissingValues_df_Global.png" )
 
 print("Script execution completed.")

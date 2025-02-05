@@ -302,35 +302,77 @@ def fill_missing_values(df):
     return df
 
 
-def add_patients_to_reach_179(test_subjects_ids, df):
-    num_required = 179
-    current_count = len(test_subjects_ids)
-    missing_patients = num_required - current_count
+def add_patients_to_reach_179(test_subjects_ids, df, mt_DNA_patients):
+    total_required = 179
+    mtDNA_required = 110
+    nDNA_required = 69
 
-    if missing_patients <= 0:
+    # print df columns
+    # add gendna_type column using the mt_DNA_patients
+    # extract values of mtDNA
+
+    df["gendna_type"] = df["subjid"].apply(
+        lambda x: 0 if x in mt_DNA_patients["subjid"].values else 1
+    )
+
+    # Current counts
+    current_mtDNA_count = len(
+        df[(df["subjid"].isin(test_subjects_ids)) & (df["gendna_type"] == 0)]
+    )
+    current_nDNA_count = len(
+        df[(df["subjid"].isin(test_subjects_ids)) & (df["gendna_type"] == 1)]
+    )
+
+    # Calculate the missing numbers to reach the required totals
+    missing_mtDNA = mtDNA_required - current_mtDNA_count
+    missing_nDNA = nDNA_required - current_nDNA_count
+
+    if missing_mtDNA <= 0 and missing_nDNA <= 0:
         print("No additional patients are needed.")
         return test_subjects_ids
 
-    # Select missing patients that are not already in test_subjects_ids
-    available_patients = df.loc[~df["subjid"].isin(test_subjects_ids), "subjid"]
+    # Filter available patients who are not already in test_subjects_ids
+    available_mtDNA_patients = df[
+        (df["gendna_type"] == 0) & (~df["subjid"].isin(test_subjects_ids))
+    ]
+    available_nDNA_patients = df[
+        (df["gendna_type"] == 1) & (~df["subjid"].isin(test_subjects_ids))
+    ]
 
-    if missing_patients > len(available_patients):
-        raise ValueError("Not enough new patients to reach the required count of 179.")
+    # Check for availability of required patients
+    if missing_mtDNA > len(available_mtDNA_patients):
+        raise ValueError(
+            "Not enough new mtDNA patients to reach the required count of 110."
+        )
+    if missing_nDNA > len(available_nDNA_patients):
+        raise ValueError(
+            "Not enough new nDNA patients to reach the required count of 69."
+        )
 
-    new_patients = available_patients.sample(n=missing_patients, random_state=42)
+    new_mtDNA_patients = available_mtDNA_patients["subjid"].sample(
+        n=missing_mtDNA, random_state=42
+    )
+    new_nDNA_patients = available_nDNA_patients["subjid"].sample(
+        n=missing_nDNA, random_state=42
+    )
 
     # Add the new patients to test_subjects_ids
-    updated_test_subjects_ids = test_subjects_ids + new_patients.tolist()
+    updated_test_subjects_ids = (
+        test_subjects_ids + new_mtDNA_patients.tolist() + new_nDNA_patients.tolist()
+    )
 
     print(
-        f"Number of missing patients: {missing_patients}, "
-        f"added {len(new_patients)} new patients. Total now: {len(updated_test_subjects_ids)}."
+        f"Added {len(new_mtDNA_patients)} mtDNA patients and {len(new_nDNA_patients)} nDNA patients. "
+        f"Total mtDNA: {current_mtDNA_count + len(new_mtDNA_patients)}, Total nDNA: {current_nDNA_count + len(new_nDNA_patients)}."
     )
+
+    # remove df["gendna_type"]
+    df = df.drop(columns=["gendna_type"])
 
     return updated_test_subjects_ids
 
 
-def experiment_definition(X, y, X_df, saving_path, num_folds=5):
+def experiment_definition(X, y, X_df, saving_path, mt_DNA_patients, num_folds=5):
 
     classifier_config_path = os.path.join(saving_path, "classifier_configuration.pkl")
 
@@ -338,8 +380,8 @@ def experiment_definition(X, y, X_df, saving_path, num_folds=5):
         print("Classifier configuration does not exist. Creating the configuration...")
 
         test_subjects_path = os.path.join(
-            saved_result_path_classification, "saved_data", "test_subjects_final.pkl"
-        )  # "test_subjects_num.pkl")#
+            saved_result_path_classification, "saved_data", "test_subjects_179.pkl"
+        )  # "test_subjects_num.pkl") "test_subjects_final.pkl"#
 
         if not os.path.exists(test_subjects_path):
             raise FileNotFoundError(
@@ -349,12 +391,20 @@ def experiment_definition(X, y, X_df, saving_path, num_folds=5):
         with open(test_subjects_path, "rb") as f:
             test_subjects_ids = pickle.load(f)
 
+        # remove hospital name from the test_subjects_ids using .apply(lambda x: x.split("_")[0])
+        test_subjects_ids = [x.split("_")[0] for x in test_subjects_ids]
+
+        # Print the number of test subjects
+        print(f"Number of test subjects: {len(test_subjects_ids)}")
+
         # Filter test indices and ensure test_subjects_ids aligns with the dataframe
         existing_test_indices = X_df[X_df["subjid"].isin(test_subjects_ids)].index
         test_subjects_ids = X_df.loc[existing_test_indices, "subjid"].tolist()
 
         if len(test_subjects_ids) < 179:
-            test_subjects_ids = add_patients_to_reach_179(test_subjects_ids, X_df)
+            test_subjects_ids = add_patients_to_reach_179(
+                test_subjects_ids, X_df, mt_DNA_patients
+            )
             test_subjects_path = os.path.join(
                 saved_result_path_classification,
                 "saved_data",
@@ -363,6 +413,8 @@ def experiment_definition(X, y, X_df, saving_path, num_folds=5):
             with open(test_subjects_path, "wb") as f:
                 pickle.dump(test_subjects_ids, f)
             print(f"Updated test subjects saved to: {test_subjects_path}")
+        else:
+            print("No additional patients are needed.")
 
         # Set up KFold
         kf_path = os.path.join(saved_result_path_classification, "kf.pkl")
@@ -372,32 +424,47 @@ def experiment_definition(X, y, X_df, saving_path, num_folds=5):
         else:
             kf = KFold(n_splits=num_folds, shuffle=True, random_state=42)
 
-        # Determine train and test indices
         test_indices = X_df[X_df["subjid"].isin(test_subjects_ids)].index
         train_indices = X_df.index.difference(test_indices)
 
         if len(test_indices) + len(train_indices) != len(X_df):
             raise ValueError("Mismatch in expected number of indices.")
 
+        train_subjects, test_subjects = (
+            X_df.loc[train_indices, "subjid"],
+            X_df.loc[test_indices, "subjid"],
+        )
+
+        X_df = X_df.drop(columns=["subjid"])
+        #drop gendna_type
+        X_df = X_df.drop(columns=["gendna_type"])
+
         X_train_df, X_test_df = X_df.loc[train_indices], X_df.loc[test_indices]
         y_train, y_test = y.loc[train_indices], y.loc[test_indices]
 
-        features = X_df.drop(columns=["subjid"]).columns
+        # print dimensions
+        print("X_train_df shape: ", X_train_df.shape)
+        print("X_test_df shape: ", X_test_df.shape)
+
+        #print the columns
+        print("X_train_df columns: ", X_train_df.columns)
+
+        features = X_df.columns  # X_df.drop(columns=["subjid"]).columns
         scorer = make_scorer(f1_score, average="weighted")
 
         # Prepare classifier configuration dictionary
         classifier_config = {
             "kf": kf,
             "scorer": scorer,
-            "X_test": X_test_df.drop(columns=["subjid"]).values,
+            "X_test": X_test_df.values,  # X_test_df.drop(columns=["subjid"]).values,
             "y_test": y_test.values,
-            "X_train": X_train_df.drop(columns=["subjid"]).values,
+            "X_train": X_train_df.values,  # ,X_train_df.drop(columns=["subjid"]).values,
             "y_train": y_train.values,
             "num_folds": num_folds,
             "nFeatures": 25,
             "thr": 0.25,
-            "train_subjects": X_train_df["subjid"].values,
-            "test_subjects": X_test_df["subjid"].values,
+            "train_subjects": train_subjects,  # X_train_df["subjid"].values,
+            "test_subjects": test_subjects,  # X_test_df["subjid"].values,
             "train_indices": train_indices,
             "test_indices": test_indices,
             "features": features,
@@ -780,6 +847,7 @@ def perform_classification_best(  # it is also saving the best model results
         pickle.dump(best_estimator, f)
     print(f"Best estimator saved to {best_estimator_file}")
 
+
 from sklearn.impute import SimpleImputer
 
 
@@ -974,10 +1042,14 @@ def process_feature_selection(
             X_train, y_train, "mrmr", num_folds, nFeatures, thr, kf
         )
         selectedFeatures_mrmr = []
-        for subset_size in range(len(top_feature_indices_mrmr) - 1, len(top_feature_indices_mrmr) + 1):
-            feature_combinations_mrmr = list(combinations(top_feature_indices_mrmr, subset_size))
+        for subset_size in range(
+            len(top_feature_indices_mrmr) - 1, len(top_feature_indices_mrmr) + 1
+        ):
+            feature_combinations_mrmr = list(
+                combinations(top_feature_indices_mrmr, subset_size)
+            )
             selectedFeatures_mrmr.extend(feature_combinations_mrmr)
-        
+
         print("Top " + str(thr * 100) + "% Feature Indices:", top_feature_indices_mrmr)
         selectedFeatures = selectedFeatures_mrmr
         selectedFeatures_name = [features[i] for i in selectedFeatures[-1]]
@@ -990,32 +1062,31 @@ def process_feature_selection(
         print("Selected Features of Subsets:", selectedFeatures_set)
 
         # Check if the model is tree-based, which does not require SequentialFeatureSelector
-        if isinstance(clf_model, (DecisionTreeClassifier, RandomForestClassifier,SVC)):
+        if isinstance(clf_model, (DecisionTreeClassifier, RandomForestClassifier, SVC)):
             # Tree-based models often do not require explicit feature selection
-            pipeline_selected = Pipeline([
-                ("imputer", SimpleImputer(strategy="mean")),
-                ("clf", clf_model)
-            ])
+            pipeline_selected = Pipeline(
+                [("imputer", SimpleImputer(strategy="mean")), ("clf", clf_model)]
+            )
         else:
             # Use SequentialFeatureSelector for non-tree-based models
             selector = SequentialFeatureSelector(
-                clf_model,
-                direction="backward",
-                scoring=scorer,
-                cv=kf,
-                n_jobs=-1
+                clf_model, direction="backward", scoring=scorer, cv=kf, n_jobs=-1
             )
-            
+
             param_grid_selected = {
                 **param_grid,
-                "selector__n_features_to_select": range(1, len(X_train_selected[0]) + 1),
+                "selector__n_features_to_select": range(
+                    1, len(X_train_selected[0]) + 1
+                ),
             }
-            
-            pipeline_selected = Pipeline([
-                ("imputer", SimpleImputer(strategy="mean")),
-                ("selector", selector),
-                ("clf", clf_model),
-            ])
+
+            pipeline_selected = Pipeline(
+                [
+                    ("imputer", SimpleImputer(strategy="mean")),
+                    ("selector", selector),
+                    ("clf", clf_model),
+                ]
+            )
     elif feature_selection == "select_from_model":
         print("Feature selection using SelectFromModel...")
         try:
