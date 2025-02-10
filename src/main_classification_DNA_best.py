@@ -11,7 +11,6 @@ import json
 from collections import Counter
 from itertools import combinations
 from datetime import datetime
-import joblib
 import os
 
 # Third-party Library Imports
@@ -69,91 +68,10 @@ BEST_PATH = os.path.join(saved_result_path_classification, "best_model")
 EXPERIMENT_PATH = os.path.join(
     saved_result_path_classification, "experiments_all_models"
 )
-VERSION = "20250128_165035"  # best model version
+VERSION = "20250210_164401"  # best model version
 
 # Ensure necessary directories exist
 os.makedirs(BEST_PATH, exist_ok=True)
-
-
-def load_and_prepare_data():
-    """Load and prepare the DataFrame for classification."""
-    if not os.path.exists(GLOBAL_DF_PATH):
-        raise FileNotFoundError(f"File not found: {GLOBAL_DF_PATH}")
-
-    df = pd.read_csv(GLOBAL_DF_PATH)
-
-    # Display initial DataFrame information
-    nRow, nCol = df.shape
-    print(f'The DataFrame "df_preprocessed" contains {nRow} rows and {nCol} columns.')
-
-    # print("Columns:", df.columns)
-
-    # Preprocess target column, handle NaNs, and print DataFrame
-    df, df_not_numerical = process_gendna_column(df)
-    df = fill_missing_values(df)
-
-    mt_DNA_patients = df[df["gendna_type"] == 0]
-    #print("Number of mtDNA patients:", mt_DNA_patients.shape[0])
-    #print("mtDNA patients:", mt_DNA_patients["subjid"].values)
-
-    # Fill the remaining missing values with -998
-    df = df.fillna(-998)
-
-    # Check if there are any remaining missing values
-    missing_count = df.isnull().sum().sum()
-    if missing_count > 0:
-        print(
-            f"Warning: There are still {missing_count} missing values in the DataFrame."
-        )
-    else:
-        print("All missing values have been successfully filled.")
-
-    return df, mt_DNA_patients
-
-
-def feature_selection(df):
-    """Select and drop unnecessary features from the DataFrame."""
-    df_vars = pd.read_excel(important_vars_path)
-    column_name = "consider for mtDNA vs nDNA classification?"
-    columns_to_drop = list(df_vars.loc[df_vars[column_name] == "N", "variable"])
-
-    # Additional columns to drop
-    additional_columns = [
-        "Hospital",
-        "nDNA",
-        "mtDNA",
-        "gendna_type",
-        "epiphen",
-        "sll",
-        "clindiag__decod",
-        "encephalopathy",
-    ]
-    additional_columns += [
-        col for col in df.columns if "pimgtype" in col or "psterm" in col
-    ]
-
-    columns_to_drop += additional_columns
-    # print("Columns to drop:", columns_to_drop)
-
-    X, y = define_X_y(df, columns_to_drop)
-    return X, y
-
-
-def print_data_info(X_train, X_test, y_train, y_test, features, df):
-    """Prints information about the datasets and features."""
-    # print the experiment path
-    print("Saving path:", BEST_PATH)
-
-    print("Dataset for classification shape:", df.shape)
-
-    print("Dimension of X_train:", X_train.shape)
-    print("Dimension of X_test:", X_test.shape)
-    print("Dimension of y_train:", y_train.shape)
-    print("Dimension of y_test:", y_test.shape)
-    # print the distribution of the target variable
-    print("Distribution of the target variable:")
-    print(Counter(y_test))
-    print("Features names:", features)
 
 
 def setup_output(current_datetime):
@@ -278,9 +196,18 @@ def perform_classification_best(X_test, y_test, clf_model, results_path, feature
     # Plot SHAP Bar plot if possible
     if hasattr(clf_model, "predict_proba"):
         try:
+
+            # Setting matplotlib to use the 'Agg' backend
+            plt.switch_backend('Agg')
+
+            # Create SHAP explainer and compute SHAP values
             explainer = shap.Explainer(clf_model, X_test)
             shap_values = explainer(X_test)
+
+            # Generate the SHAP bar plot
             shap.plots.bar(shap_values)
+
+            # Define file path and save the plot
             shap_bar_plot_file = "shap_bar_plot_best.png"
             plt.savefig(
                 os.path.join(results_path, shap_bar_plot_file),
@@ -288,6 +215,7 @@ def perform_classification_best(X_test, y_test, clf_model, results_path, feature
                 bbox_inches="tight",
             )
             plt.close()
+            print(f"SHAP bar plot saved at {os.path.join(results_path, shap_bar_plot_file)}")
 
         except Exception as e:
             print("Error plotting SHAP bar plot:", str(e))
@@ -317,6 +245,9 @@ def main():
         num_folds,
     ) = experiment_definition(X, y, df, EXPERIMENT_PATH, mt_DNA_patients)
 
+
+    
+
     # Save the df to a pickle file and to a csv file
     df.to_pickle(os.path.join(BEST_PATH, "df_classification.pkl"))
     df.to_csv(os.path.join(BEST_PATH, "df_classification.csv"))
@@ -327,7 +258,7 @@ def main():
             f.write("%s\n" % item)
 
     print_data_info(
-        X_train, X_test, y_train, y_test, features, df.drop(columns=["subjid"])
+        X_train, X_test, y_train, y_test, features, df.drop(columns=["subjid"]), EXPERIMENT_PATH
     )
 
     print("Starting the classification...")
@@ -345,15 +276,22 @@ def main():
         print(f"Best Score: {best_score}")
         print("Best Parameters:", best_params)
 
-    # Create an imputer object with 'constant' strategy and your specified fill value
-    imputer = SimpleImputer(strategy="constant", fill_value=998)
+    #features selected
+    selected_features=['aao', 'alcohol', 'bgc', 'bmi', 'card_abn', 'ear_voice_abn', 'echo',
+       'eeg', 'eye_abn', 'fhx', 'gait_abn', 'hba1c', 'hisc', 'internal_abn',
+       'lac', 'le', 'mhterm', 'mrisll', 'musc_sk_abn', 'pcgntn', 'pssev',
+       'resp', 'smoking', 'symp_on_1', 'symp_on_3', 'symp_on_4', 'va', 'wml']
+    print("Features used in the classification:")
+    print(selected_features)
 
-    # Fit the imputer on the training data and transform it
-    X_train = imputer.fit_transform(X_train)
-    # Transform the test data with the same imputer
-    X_test = imputer.transform(X_test)
+       # Assuming column names available, construct DataFrame
+    X_test = pd.DataFrame(X_test, columns=features)  # 'all_column_names' should be defined
 
-    perform_classification_best(X_test, y_test, best_estimator, BEST_PATH, features)
+    # Select features
+    X_test_selected = X_test[selected_features]
+
+
+    perform_classification_best(X_test_selected, y_test, best_estimator, BEST_PATH, selected_features)
 
     print("Classification with the best classifier completed and results saved.")
 

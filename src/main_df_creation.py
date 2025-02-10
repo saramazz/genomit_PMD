@@ -50,7 +50,7 @@ hospital_names = [folder for folder in folders if folder not in folders_to_remov
 print(f"Number of hospitals: {len(hospital_names)}")
 print("Hospital names:", hospital_names)
 
-#input("Press Enter to proceed with the script...")
+# input("Press Enter to proceed with the script...")
 
 
 print("Creating DataFrame for all hospitals...")
@@ -162,11 +162,11 @@ for hospital_name in hospital_names:
     dfs.append(df)
 
     subjid_form_df = pd.DataFrame(data_list)
-    #save the subjid_form_df in the saved_result_path as xlsx
-    subjid_form_df.to_excel(os.path.join(saved_result_path, f"subjid_form_info_{hospital_name}.xlsx"), index=False)
-
-
-    
+    # save the subjid_form_df in the saved_result_path as xlsx
+    subjid_form_df.to_excel(
+        os.path.join(saved_result_path, f"subjid_form_info_{hospital_name}.xlsx"),
+        index=False,
+    )
 
     nRow, nCol = df.shape
     print(f"There are {nRow} rows and {nCol} columns in the df_{hospital_name}")
@@ -178,7 +178,7 @@ for hospital_name in hospital_names:
 
 # Concatenate all hospital-specific DataFrames after the loop
 final_df = pd.concat(dfs, ignore_index=True)
-#check if there are duplicates
+# check if there are duplicates
 print("Checking for duplicate patients in subjid...")
 print("Dimensions of final_df before removing duplicates: ", final_df.shape)
 print(f"Total unique 'subjid' in final_df: {final_df['subjid'].nunique()}")
@@ -187,15 +187,15 @@ print(f"Total unique 'subjid' in final_df: {final_df['subjid'].nunique()}")
 
 
 # Save the final concatenated DataFrame
-#final_df_path = os.path.join(saved_result_path, "final_df.pkl")
+# final_df_path = os.path.join(saved_result_path, "final_df.pkl")
 final_df_path = os.path.join(saved_result_path, "df_Global_raw.pkl")
 
 final_df.to_pickle(final_df_path)
-#save it to csv
+# save it to csv
 final_df.to_csv(os.path.join(saved_result_path, "df_Global_raw.csv"), index=False)
 
 # add Hospital column to the final_df
-#merge_patient_dataframes(hospital_names, saved_result_path)
+# merge_patient_dataframes(hospital_names, saved_result_path)
 
 
 for hospital_name in hospital_names:
@@ -229,10 +229,13 @@ df = remove_hp_prefix(df, "psterm__decod")
 print("Adding top 5 symptoms columns...")
 
 df = add_top5_symptoms_columns(df, hospital_names, "consent", "pmdsymptoms", "pmd")
+
+
 df = remove_hp_prefix(df, "symp_on_")
 
 nRow, nCol = df.shape
 print(f"DataFrame dimensions after removing prefixes: {nRow} rows, {nCol} columns")
+
 
 print("Applying specific preprocessing steps...")
 columns_to_set_zero = [
@@ -284,25 +287,31 @@ mapping_abnormalities_path = os.path.join(
 )
 df = add_abnormalities_cols(df, mapping_abnormalities_path, mapping_symptoms_path)
 
-#print the dimension of the df before adding the patients from the export of 06/2024
+# print the dimension of the df before adding the patients from the export of 06/2024
 nRow, nCol = df.shape
-print(f"DataFrame dimensions before adding patients from the export of 06/2024: {nRow} rows, {nCol} columns")
+print(
+    f"DataFrame dimensions before adding patients from the export of 06/2024: {nRow} rows, {nCol} columns"
+)
 
-#Add patients from the export of 06/2024
+#
+
+# Add patients from the export of 06/2024
 df_export = pd.read_excel(os.path.join(saved_result_path, "df_Global_202406.xlsx"))
-#remove the hospital name from the subjid column
+# remove the hospital name from the subjid column
 df_export["subjid"] = df_export["subjid"].apply(lambda x: x.split("_")[0])
 
-#check if there are patients in the df_export that are not in the df and print how many
+# check if there are patients in the df_export that are not in the df and print how many
 patients_not_in_df = df_export[~df_export["subjid"].isin(df["subjid"])]
-print(f"Patients in the df_export that are not in the df: {patients_not_in_df['subjid'].nunique()}")
-#add the patientspatients_not_in_df from the df_export to the df
+print(
+    f"Patients in the df_export that are not in the df: {patients_not_in_df['subjid'].nunique()}"
+)
+# add the patientspatients_not_in_df from the df_export to the df
 df = pd.concat([df, patients_not_in_df], ignore_index=True)
 
-#print the number of patients in the df
+# print the number of patients in the df
 print(f"Total unique 'subjid' in final_df: {df['subjid'].nunique()}")
 
-#input("Press Enter to proceed with the script...")
+# input("Press Enter to proceed with the script...")
 
 print("Ordering columns alphabetically...")
 df = order_columns_alphabetically(df, ["Hospital", "subjid", "visdat"])
@@ -313,6 +322,47 @@ print("New_shape of df before check duplicates", df.shape)
 print("Checking for duplicate patients...")
 df = check_multiple_patients(df, "subjid", "visdat", saved_result_path)
 
+# check that symp columns are added and print the distribution of the top 5 symptoms
+print("Checking that symp columns are added...")
+print("Columns in df: ", df.columns)
+print("Plotting top 5 symptoms distribution...")
+symp_cols = [col for col in df.columns if "symp_on_" in col]
+
+"""
+for col in symp_cols:
+    print(f"Column: {col}")
+    print(df[col].value_counts())
+    print("\n")
+    """
+
+# check if for some patients the top 5 symptoms are all nan
+patients_with_all_nan = df[df[symp_cols].isnull().all(axis=1)]
+print(
+    f"Patients with all nan in top 5 symptoms: {patients_with_all_nan['subjid'].nunique()}"
+)
+
+
+# save the patients_with_all_nan in a file
+patients_with_all_nan.to_csv(
+    os.path.join(saved_result_path, "patients_with_all_nan_sym.csv"), index=False
+)
+
+# check if symp_on_1 has nan values
+print("Checking if symp_on_1 has nan values...")
+print(df["symp_on_1"].isnull().sum())
+
+# remove patients with nan in symp_on_1
+df = df[~df["symp_on_1"].isnull()]
+
+# remove the patients with all nan in top 5 symptoms
+df = df[~df["subjid"].isin(patients_with_all_nan["subjid"])]
+# print the new dimension of the df
+nRow, nCol = df.shape
+print(
+    f"DataFrame dimensions after removing patients with all nan in top 5 symptoms: {nRow} rows, {nCol} columns"
+)
+
+# input("Press Enter to proceed with the script...")
 
 # print the distribution of missing values for each column
 nan_counts = count_nan_per_column(df)
@@ -326,12 +376,36 @@ nan_counts = count_nan_per_column(df)
 # print(f"NaN value count per column after filling missing values: {nan_counts}")
 
 
-#print("Updating 'subjid' by appending 'hospital'...")
-#df["subjid"] = df.apply(lambda row: f"{row['subjid']}_{row['Hospital']}", axis=1)
+# print("Updating 'subjid' by appending 'hospital'...")
+# df["subjid"] = df.apply(lambda row: f"{row['subjid']}_{row['Hospital']}", axis=1)
 df = df.drop_duplicates(subset=["subjid", "visdat"], keep="last")
 
 # if the column is all nan, remove it
 df = df.dropna(axis=1, how="all")
+
+print("Plotting missing values...")
+plot_missing_values(
+    df,
+    os.path.join(global_path, "saved_results/distribution_variables"),
+    "Histogram_MissingValues_df_Global.png",
+)
+
+print("Script execution completed.")
+
+# print that missing values are filled with -998
+print("Filling the remaining missing values with -998...")
+
+# Fill the remaining missing values with -998
+df = df.fillna(-998)
+
+# Check if there are any remaining missing values
+missing_count = df.isnull().sum().sum()
+if missing_count > 0:
+    print(
+        f"Warning: There are still {missing_count} missing values in the DataFrame."
+    )
+else:
+    print("All missing values have been successfully filled.")
 
 print("Saving preprocessed DataFrame...")
 # print the dimension of the df
@@ -349,9 +423,3 @@ nRow, nCol = df_num.shape
 print(f"Numerical DataFrame dimensions: {nRow} rows, {nCol} columns")
 df_num.to_pickle(os.path.join(saved_result_path, "df_num_Global.pkl"))
 df_num.to_csv(saved_result_path + "/df_Global_num.csv", index=False)
-
-print("Plotting missing values...")
-plot_missing_values(
-    df, os.path.join(global_path, "saved_results/distribution_variables"),"Histogram_MissingValues_df_Global.png" )
-
-print("Script execution completed.")

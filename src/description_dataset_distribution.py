@@ -66,6 +66,69 @@ file_name = f"dataset_distribution.txt"
 sys.stdout = open(os.path.join(SAVING_PATH, file_name), "w")
 
 
+def calculate_percentage(count, total):
+        return (count / total) * 100 if total > 0 else 0
+        
+    
+def print_data_info(df):
+    # Function to print data info from DataFrame
+    
+
+    # Processing 'aao' column
+    if "aao" in df.columns:
+        df_aao = df["aao"].dropna()
+        total_aao = len(df_aao)
+        
+        aao_below_16 = df_aao[df_aao < 16]
+        aao_above_16 = df_aao[df_aao >= 16]
+
+        aao_below_16_percentage = calculate_percentage(len(aao_below_16), total_aao)
+        aao_above_16_percentage = calculate_percentage(len(aao_above_16), total_aao)
+
+        print(f"Percentage of subjects with Age at Onset (aao) below 16 years old: {aao_below_16_percentage:.2f}%")
+        print(f"Percentage of subjects with Age at Onset (aao) 16 years or older: {aao_above_16_percentage:.2f}%")
+        print(f"Total percentage: {aao_below_16_percentage + aao_above_16_percentage:.2f}%")
+    else:
+        print("No 'Age at Onset' column")
+
+    # Processing 'cage' column
+    if "cage" in df.columns:
+        df_cage = df["cage"].dropna()
+        total_cage = len(df_cage)
+
+        cage_below_16 = df_cage[df_cage < 16]
+        cage_above_16 = df_cage[df_cage >= 16]
+
+        cage_below_16_percentage = calculate_percentage(len(cage_below_16), total_cage)
+        cage_above_16_percentage = calculate_percentage(len(cage_above_16), total_cage)
+
+        print(f"Percentage of subjects with Calculated Age (cage) below 16 years old: {cage_below_16_percentage:.2f}%")
+        print(f"Percentage of subjects with Calculated Age (cage) 16 years or older: {cage_above_16_percentage:.2f}%")
+        print(f"Total percentage: {cage_below_16_percentage + cage_above_16_percentage:.2f}%")
+    else:
+        print("No 'Calculated Age' column")
+
+    if "sex" in df.columns:
+
+        # Filter the DataFrame to include only rows where 'sex' is 'm' or 'f'
+        df_sex_filtered = df["sex"][df["sex"].isin(['m', 'f'])]
+
+        total_sex = len(df_sex_filtered)
+        sex_counts = df_sex_filtered.value_counts()
+
+
+
+        
+        percentage_male = calculate_percentage(sex_counts.get("m", 0), total_sex)
+        percentage_female = calculate_percentage(sex_counts.get("f", 0), total_sex)
+
+        print(f"Percentage male: {percentage_male:.2f}%")
+        print(f"Percentage female: {percentage_female:.2f}%")
+        print(f"Total percentage (based on male and female): {percentage_male + percentage_female:.2f}%")
+    
+    else:
+        print("No 'sex' column")
+
 
 for type_db in type_data:
     # Load the global dataframe
@@ -109,70 +172,12 @@ for type_db in type_data:
     #drop the columns with 0 missing values
     df_missing = df.drop(no_missing_values_columns, axis=1)
     plot_missing_values(
-    df_missing,  SAVING_PATH, f"Histogram_MissingValues_no0_{type_db}.png")    
-    
-    # print data info
-
-    try:
-
-    
-        df_aao = df["aao"].dropna()
-    
+    df_missing,  SAVING_PATH, f"Histogram_MissingValues_no0_{type_db}.png")
 
 
-        # Calculate percentages for aao below and above 16 years old
-        aao_below_16 = df_aao[df_aao < 16]
-        aao_below_16_percentage = (len(aao_below_16) / len(df_aao)) * 100
-        aao_above_16 = df_aao[df_aao >= 16]
-        aao_above_16_percentage = (len(aao_above_16) / len(df_aao)) * 100
 
-        print(
-            f"Percentage of subjects with Age at Onset (aao) below 16 years old: {aao_below_16_percentage:.2f}%"
-        )
-        print(
-            f"Percentage of subjects with Age at Onset (aao) above 16 years old: {aao_above_16_percentage:.2f}%"
-        )
-    except:
-        print("No Age at Onset column")
-
-    try:
-
-        df_cage = df["cage"].dropna()
-            
-
-
-        # Calculate percentages for cage below and above 16 years old
-        cage_below_16 = df_cage[df_cage < 16]
-        cage_below_16_percentage = (len(cage_below_16) / len(df_cage)) * 100
-        cage_above_16 = df_cage[df_cage >= 16]
-        cage_above_16_percentage = (len(cage_above_16) / len(df_cage)) * 100
-
-        print(
-            f"Percentage of subjects with Calculated Age (cage) below 16 years old: {cage_below_16_percentage:.2f}%"
-        )
-        print(
-            f"Percentage of subjects with Calculated Age (cage) above 16 years old: {cage_above_16_percentage:.2f}%"
-        )
-    except:
-        print("No Calculated Age column")
-    
-    try:
-
-            # Filter out NaN values for each column
-        df_sex = df["sex"].dropna()
-
-        # Calculate sex distribution percentages
-        sex_counts = df_sex.value_counts()
-        total_count = len(df_sex)
-
-        percentage_male = (sex_counts["m"] / total_count) * 100
-        percentage_female = (sex_counts["f"] / total_count) * 100
-
-        print(f"Percentage male: {percentage_male:.2f}%")
-        print(f"Percentage female: {percentage_female:.2f}%")
-        print(f"Total percentage: {percentage_male + percentage_female:.2f}%")
-    except:
-        print("No sex column")
+    # Example usage with DataFrame df:
+    print_data_info(df)
 
     # sobstitute using this mapping in the column clindiag__decod
     clindiag_mapping = {

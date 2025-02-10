@@ -12,9 +12,10 @@ from utilities import *
 from processing import *
 from plotting import *
 
-#import confusion matrix
+# import confusion matrix
 from sklearn.metrics import confusion_matrix
-#import seaborn
+
+# import seaborn
 import seaborn as sns
 import matplotlib.pyplot as plt
 import shap
@@ -30,6 +31,13 @@ PLOT PREPROCESSING
 
 
 def plot_missing_values(df, saved_result_path, file_name):
+
+    # Columns to remove with in the name pimgtype and psterm__decod
+    columns_to_remove = [
+        col for col in df.columns if "pimgtype" in col or "psterm__decod" in col
+    ]
+
+    df = df.drop(columns=columns_to_remove)
     # Calculate missing values and their percentages
     missing_values = df.isnull().sum()
     total_values = len(df)
@@ -39,7 +47,7 @@ def plot_missing_values(df, saved_result_path, file_name):
     )
     # Sort the data by missing percentage
     missing_data = missing_data.sort_values(by="Missing Values", ascending=False)
-    
+
     # Plotting
     plt.figure(figsize=(15, 25))
     plt.barh(missing_data.index, missing_data["Missing Percentage"], color="lightcoral")
@@ -51,7 +59,7 @@ def plot_missing_values(df, saved_result_path, file_name):
     plt.yticks(fontsize=10)
     plt.grid()
     plt.savefig(os.path.join(saved_result_path, file_name), bbox_inches="tight")
-    
+
     # Print statement to confirm the plot has been saved
     print(f"Missing values plot saved in {saved_result_path}")
     plt.close()
@@ -122,44 +130,50 @@ def plot_histogram_visits_per_patient(df, hospital_name, saved_result_path):
 
 def plot_gendna_distribution(df):
     """
-    Plot the distribution of 'nDNA' and 'mtDNA' classes in a pie chart.
+    Plot the distribution of 'gendna_type_num' classes in a pie chart.
 
     Parameters:
-    - df: DataFrame containing 'nDNA' and 'mtDNA' columns.
-    - save_path: Path to save the generated plot.
+    - df: DataFrame containing the 'gendna_type_num' column.
+    - saved_result_path_classification: Path to save the generated plot.
     """
-    # Set font size for all components
+
     plt.rcParams["font.size"] = 20
 
+    # Validate necessary column existence
+    if "gendna_type_num" not in df.columns:
+        raise ValueError("DataFrame must contain 'gendna_type_num' column")
+
+    # Calculate class counts directly from 'gendna_type_num'
+    class_counts = df["gendna_type_num"].value_counts()
+
+    # Set up the labels for the classes
+    class_labels = {0: "mtDNA", 1: "nDNA"}
+    class_counts.index = class_counts.index.map(class_labels.get)
+
+    # Debug statements to check accuracy of class counts
+    print(f"Class counts after mapping: {class_counts}")
+
     # Use seaborn color palette for shades of blue
-    colors = sns.color_palette("Blues", len(df[["nDNA", "mtDNA"]].columns))
+    colors = sns.color_palette("Blues", len(class_counts))
 
-    # Calculate class counts and total samples
-    class_counts = df[["nDNA", "mtDNA"]].apply(pd.Series.value_counts).sum()
-    total_samples = len(df[["nDNA", "mtDNA"]])
-
-    # Plot the pie chart
+    # Prepare and display the pie chart
     plt.figure(figsize=(15, 8))
     class_counts.plot.pie(
-        autopct=lambda p: f"{p:.1f}%",
-        figsize=(15, 8),
+        autopct=lambda p: f"{p:.1f}%" if p > 0 else "",
         labels=class_counts.index,
-        legend=True,
         colors=colors,
+        legend=True,
     )
 
-    # Set title and legend
+    # Set title and other formatting elements
     plt.title("Distribution of nDNA vs mtDNA Classes", fontsize=20)
     plt.legend(loc="upper left", bbox_to_anchor=(1, 1), fontsize=20)
 
-    # Save the plot
+    # Save the plot to the designated path
     my_file = "gendna_distribution_pie_n_mt.png"
-    plt.savefig(
-        os.path.join(saved_result_path_classification, my_file), bbox_inches="tight"
-    )
-    print(
-        f"gendna distribution plot saved in {os.path.join(saved_result_path_classification, my_file)}"
-    )
+    plot_path = os.path.join(saved_result_path_classification, my_file)
+    plt.savefig(plot_path, bbox_inches="tight")
+    print(f"gendna distribution plot saved at {plot_path}")
     plt.close()
 
 

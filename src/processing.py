@@ -82,68 +82,50 @@ from sklearn.decomposition import PCA
 
 # %% Feature ranking on the training set using cross-validation
 def rankfeatures(X_train, Y_train, frmethod, nFolds, nFeatures, thr, kf):
-
     Y_train = np.asarray(Y_train)
-
-    # print('Y_train', Y_train)
     top_features_all = []
 
-    # Iterate over training sets, leaving out data from N/5 patients at a time
-    patient_indices = np.arange(X_train.shape[0])  # np.unique(S)
-    # print('patient_indices', patient_indices)
-    # Shuffle the list of patients
+    # Generate shuffled patient indices
+    patient_indices = np.arange(X_train.shape[0])
     np.random.seed(42)
     np.random.shuffle(patient_indices)
-    # Use KFold to split the shuffled indices into folds
-    # kf = KFold(n_splits=nFolds)
 
-    # Iterate over the folds
+    # Process K-fold splitting
     for fold, (train_indices, val_indices) in enumerate(kf.split(patient_indices)):
-
+        print(f"Processing Fold {fold + 1}")
         X_train_cv = X_train[train_indices]
         y_train_cv = Y_train[train_indices]
 
-        # print('X_train_cv shape: ', X_train_cv.shape)
-        # print('y_train_cv shape: ', y_train_cv.shape)
-
         if frmethod == "mrmr":
-            print(f"MRMR feature ranking - Fold {fold+1} of {nFolds}")
-            # Feature ranking using MRMR
+            print(f"MRMR feature ranking - Fold {fold + 1} of {nFolds}")
             top_feature_indices = mrmr.mrmr_regression(
                 X=pd.DataFrame(X_train),
                 y=pd.DataFrame(Y_train),
                 K=int(thr * X_train.shape[1]),
             )
+            top_features_all.append(top_feature_indices)
 
-        top_features_all.append(top_feature_indices)
-
+    # Process feature aggregation
     top_features_all_ = np.asarray(top_features_all, dtype=np.float32)
-    # print('Found top_features_all_',top_features_all_)
+    print('Found top_features_all_', top_features_all_)
 
-    # Find all best features across the folds
     all_top_features = np.unique(top_features_all_)
-
-    # For each best feature, retrieve the corresponding rank in each fold
     feature_scores = np.empty([len(all_top_features), 2], dtype=int)
-    ii = 0
-    for ff in all_top_features:
+
+    for ii, ff in enumerate(all_top_features):
         idx_ff = np.asarray(np.where(np.isin(top_features_all_, ff)))
         score = np.sum(nFeatures - idx_ff[1])
         feature_scores[ii, :] = [ff, score]
-        ii += 1
 
     sorted_scores = np.argsort(feature_scores[:, 1])[::-1]
-    # top_features = feature_scores[sorted_scores[:4], 0]
-    top_features = feature_scores[
-        sorted_scores[: (int(thr * X_train.shape[1]))], 0
-    ]  # TODO XGB had thr/2 modify it
-    # top_features = feature_scores[sorted_scores[:nFeatures], 0]
+    top_features = feature_scores[sorted_scores[:int(thr * X_train.shape[1])], 0]
 
     print("Top 25% Features:")
     print(top_features)
     print("Number of Top Features:", len(top_features))
-
+    
     return top_features
+
 
 
 # Define a function to calculate the distribution of a categorical column
@@ -162,6 +144,17 @@ def calculate_distribution(df, column_name, mapping):
     }
     return distribution
 
+# Define a mapping function to assign 'gendna_type'
+def assign_gendna_type(value):
+    if value in [4, 6, 8]:
+        return "nDNA"
+    elif value in [5, 7]:
+        return "mtDNA"
+    else:
+        #print the value
+        #print("Value of gendna: ", value)
+        return "Unknown"  # Use an explicit category or designate a special case
+
 
 def process_gendna_column(df):
     """
@@ -174,132 +167,110 @@ def process_gendna_column(df):
     Returns:
         DataFrame: The DataFrame with processed 'gendna' column.
     """
-    # Column to be processed
-    column = "gendna"
 
-    # Display distribution of values in the 'gendna' column
-    # print(f"Distribution for column: {column}")
-    # print(df[column].value_counts())
+    # Check if there are any remaining missing values
+    missing_count = df.isnull().sum().sum()
+    if missing_count > 0:
+        print(
+            f"Warning: There are still {missing_count} missing values in the DataFrame."
+        )
+    else:
+        print("All missing values have been successfully filled.")
 
-    # Count the NaN values in the 'gendna' column
-    nan_count = df["gendna"].isna().sum()
-    # print(f"Number of NaN values in '{column}': {nan_count}")
+    # check if there are patients with nan values in the gendna column
+    if df["gendna"].isnull().sum() > 0:
+        print("There are patients with NaN values in the 'gendna' column.")
+        # Column to be processed
+        column = "gendna"
 
-    # Save patients with NaN 'gendna' information to a file
-    file_path = os.path.join(
-        saved_result_path_classification, "patients_with_nan_or_1_gendna.csv"
-    )
-    patients_with_nan_gendna = df[df["gendna"].isnull()][["subjid", "Hospital"]]
-    # add to the patients_with_nan_gendna the patients where gendna is equal to 1
-    patients_with_1_gendna = df[df["gendna"] == 1][["subjid", "Hospital"]]
-    patients_with_nan_gendna = pd.concat(
-        [patients_with_nan_gendna, patients_with_1_gendna]
-    )
-    # create a df with the all the columns of these patients
-    patients_with_nan_gendna = df[df["subjid"].isin(patients_with_nan_gendna["subjid"])]
-    patients_with_nan_gendna.to_csv(file_path, index=False)
-    # convert to numerical and save it patients_with_nan_gendna
-    patients_with_nan_gendna = convert_to_numerical(patients_with_nan_gendna)
-    patients_with_nan_gendna.to_csv(
-        os.path.join(
-            saved_result_path_classification, "patients_with_nan_or_1_gendna_num.csv"
-        ),
-        index=False,
-    )
-    # print the dimension of the file
-    # print("Patients with NaN or 1 'gendna' information saved to:", file_path)
-    # print("Dimension of the file:", patients_with_nan_gendna.shape)
+        # Display distribution of values in the 'gendna' column
+        # print(f"Distribution for column: {column}")
+        # print(df[column].value_counts())
 
-    # Drop NaN values from 'gendna' column
-    df_non_nan = df.dropna(subset=["gendna"])
+        # Count the NaN values in the 'gendna' column
+        nan_count = df["gendna"].isna().sum()
+        # print(f"Number of NaN values in '{column}': {nan_count}")
+
+        # Save patients with NaN 'gendna' information to a file
+        file_path = os.path.join(
+            saved_result_path_classification, "patients_with_nan_or_1_gendna.csv"
+        )
+        patients_with_nan_gendna = df[df["gendna"].isnull()][["subjid", "Hospital"]]
+        # add to the patients_with_nan_gendna the patients where gendna is equal to 1
+        patients_with_1_gendna = df[df["gendna"] == 1][["subjid", "Hospital"]]
+        patients_with_nan_gendna = pd.concat(
+            [patients_with_nan_gendna, patients_with_1_gendna]
+        )
+        # create a df with the all the columns of these patients
+        patients_with_nan_gendna = df[
+            df["subjid"].isin(patients_with_nan_gendna["subjid"])
+        ]
+        patients_with_nan_gendna.to_csv(file_path, index=False)
+        # convert to numerical and save it patients_with_nan_gendna
+        patients_with_nan_gendna = convert_to_numerical(patients_with_nan_gendna)
+        patients_with_nan_gendna.to_csv(
+            os.path.join(
+                saved_result_path_classification,
+                "patients_with_nan_or_1_gendna_num.csv",
+            ),
+            index=False,
+        )
+        # print the dimension of the file
+        # print("Patients with NaN or 1 'gendna' information saved to:", file_path)
+        # print("Dimension of the file:", patients_with_nan_gendna.shape)
+
+        # Drop NaN values from 'gendna' column
+        df_non_nan = df.dropna(subset=["gendna"])
+
+    df_processed = df.copy()
 
     # Remove rows where 'gendna' is equal to 1
-    df_non_nan = df_non_nan[df_non_nan["gendna"] != 1]
+    df_processed = df_processed[df_processed["gendna"] != 1]
 
-    # print the number of rows removed and the new number of rows
-    # print(f"Number of rows removed: {len(df) - len(df_non_nan)}")
-    # print(f"New number of rows: {len(df_non_nan)}")
-
-    # Create 'nDNA' and 'mtDNA' classes
-    df_non_nan["nDNA"] = df_non_nan["gendna"].apply(
-        lambda x: "nDNA" if x in [4, 6, 8] else None
-    )
-    df_non_nan["mtDNA"] = df_non_nan["gendna"].apply(
-        lambda x: "mtDNA" if x in [5, 7] else None
-    )
-
-    # Combine 'nDNA' and 'mtDNA' classes into 'gendna_type' column
-    df_non_nan["gendna_type"] = df_non_nan.apply(
-        lambda row: row["nDNA"] if row["nDNA"] is not None else row["mtDNA"], axis=1
-    )
+    # Assign 'gendna_type' based on existing 'gendna' values
+    df_processed["gendna_type"] = df_processed["gendna"].apply(assign_gendna_type)
 
     # Print distribution of 'gendna_type'
-    # print("\nDistribution of 'gendna_type':")
-    # print(df_non_nan['gendna_type'].value_counts())
+    print("\nDistribution of 'gendna_type':")
+    print(df_processed["gendna_type"].value_counts())
 
     # Convert 'gendna_type' into numerical values
-    df_non_nan["gendna_type"] = df_non_nan["gendna_type"].replace(
-        {"mtDNA": 0, "nDNA": 1}
-    )
+    # Here we assume "Unknown" is not required further; adjust as needed
+    df_processed["gendna_type_num"] = df_processed["gendna_type"].replace({
+        "mtDNA": 0,
+        "nDNA": 1
+        # Optionally, you might also handle "Unknown" here if it remains
+    })
+    #remove Unknown patienta
+    df_processed = df_processed[df_processed["gendna_type"] != "Unknown"]
+    #print how many unknown patients were removed
+    print("Number of Unknown patients removed: ", len(df) - len(df_processed))
 
-    plot_gendna_distribution(df_non_nan)
+    # Plot distribution of 'gendna_type'
+    plot_gendna_distribution(df_processed)
 
     # Convert DataFrame to numerical format
-    df_processed = convert_to_numerical(df_non_nan)
+    df_processed = convert_to_numerical(df_processed)
 
     print("\nDistribution of 'gendna_type' in the numerical DataFrame:")
     print(df_processed["gendna_type"].value_counts())
     # print as percentage
-    print("\nDistribution of 'gendna_type' in the numerical DataFrame:")
+    print("\nPercentage distribution of 'gendna_type' in the numerical DataFrame:")
     print(df_processed["gendna_type"].value_counts(normalize=True) * 100)
 
-    # Plot distribution of 'gendna_type'
-
-    return df_processed, df_non_nan
-
-
-def define_X_y(df, columns_to_drop):
-    """
-    Define X and y from the given DataFrame, dropping specified columns.
-
-    Parameters:
-        df (DataFrame): The DataFrame containing the data.
-        global_path (str): The path to the global directory.
-        columns_to_drop (list): List of column names to drop from the DataFrame.
-
-    Returns:
-        tuple: A tuple containing X (features) and y (target).
-    """
-    # Extract the target variable
-    y = df["gendna_type"]
-
-    # Get the list of columns to drop based on 'N' in the specified column
-    df.drop(columns=columns_to_drop, inplace=True)
-
-    # Convert X_df to numpy array
-    X = df.values
-
-    return X, y
+    # Check if there are any remaining missing values
+    missing_count = df_processed.isnull().sum().sum()
+    if missing_count > 0:
+        print(
+            f"Warning: There are still {missing_count} missing values in the DataFrame."
+        )
+    else:
+        print("All missing values have been successfully filled.")
 
 
-def fill_missing_values(df):
-    # Load the important variables file
-    df_vars = pd.read_excel(important_vars_path)
+    return df_processed
 
-    # Print columns not in the important variables list
-    missing_columns = [
-        col for col in df.columns if col not in df_vars["variable"].values
-    ]
-    # Fill missing values based on the important variables list
-    for index, row in df_vars.iterrows():
-        column = row["variable"]
-        na = row["NA"]
-        if column in df.columns:
-            if na == "998":
-                df[column].fillna(998, inplace=True)
-            # else:
-            # df[column].fillna(998, inplace=True)
-    return df
+
 
 
 def add_patients_to_reach_179(test_subjects_ids, df, mt_DNA_patients):
@@ -401,20 +372,19 @@ def experiment_definition(X, y, X_df, saving_path, mt_DNA_patients, num_folds=5)
         existing_test_indices = X_df[X_df["subjid"].isin(test_subjects_ids)].index
         test_subjects_ids = X_df.loc[existing_test_indices, "subjid"].tolist()
 
-        if len(test_subjects_ids) < 179:
-            test_subjects_ids = add_patients_to_reach_179(
-                test_subjects_ids, X_df, mt_DNA_patients
-            )
-            test_subjects_path = os.path.join(
-                saved_result_path_classification,
-                "saved_data",
-                "test_subjects_final.pkl",
-            )
-            with open(test_subjects_path, "wb") as f:
-                pickle.dump(test_subjects_ids, f)
-            print(f"Updated test subjects saved to: {test_subjects_path}")
-        else:
-            print("No additional patients are needed.")
+        # print the length of test_subjects_ids
+        print("Length of test_subjects_ids: ", len(test_subjects_ids))
+
+        # print that the new test_subjects_ids are saved
+        print("New test_subjects_ids are saved in the test_subjects_final.pkl file")
+        test_subjects_path = os.path.join(
+            saved_result_path_classification,
+            "saved_data",
+            "test_subjects_final.pkl",
+        )
+        with open(test_subjects_path, "wb") as f:
+            pickle.dump(test_subjects_ids, f)
+        print(f"Updated test subjects saved to: {test_subjects_path}")
 
         # Set up KFold
         kf_path = os.path.join(saved_result_path_classification, "kf.pkl")
@@ -436,17 +406,29 @@ def experiment_definition(X, y, X_df, saving_path, mt_DNA_patients, num_folds=5)
         )
 
         X_df = X_df.drop(columns=["subjid"])
-        #drop gendna_type
-        X_df = X_df.drop(columns=["gendna_type"])
+        # print columns
+        print("X_df columns: ", X_df.columns)
+        # drop gendna_type
+        # X_df = X_df.drop(columns=["gendna_type"])
+
+        #print the y distribution
+        print("Y distribution:")
+        print(y.value_counts())
+
+
 
         X_train_df, X_test_df = X_df.loc[train_indices], X_df.loc[test_indices]
         y_train, y_test = y.loc[train_indices], y.loc[test_indices]
+
+        #print the y_train distribution
+        print("Y_train distribution:")
+        print(y_train.value_counts())
 
         # print dimensions
         print("X_train_df shape: ", X_train_df.shape)
         print("X_test_df shape: ", X_test_df.shape)
 
-        #print the columns
+        # print the columns
         print("X_train_df columns: ", X_train_df.columns)
 
         features = X_df.columns  # X_df.drop(columns=["subjid"]).columns
@@ -945,6 +927,130 @@ def balance_data(X_train, y_train, X_test, y_test, balancing_technique):
     print("Test Set Class Distribution after Resampling:", Counter(y_test_resampled))
 
     return X_train_resampled, y_train_resampled, X_test_resampled, y_test_resampled
+
+
+def feature_selection(df):
+    """Select and drop unnecessary features from the DataFrame."""
+    df_vars = pd.read_excel(important_vars_path)
+    column_name = "consider for mtDNA vs nDNA classification?"
+    columns_to_drop = list(df_vars.loc[df_vars[column_name] == "N", "variable"])
+
+    # Additional columns to drop
+    additional_columns = [
+        "Hospital",
+        # "nDNA",
+        # "mtDNA",
+        "gendna_type",
+        "gendna_type_num",
+        "epiphen",
+        "sll",
+        "clindiag__decod",
+        "encephalopathy",
+    ]
+    additional_columns += [
+        col for col in df.columns if "pimgtype" in col or "psterm" in col
+    ]
+
+    columns_to_drop += additional_columns
+    # print("Columns to drop:", columns_to_drop)
+
+    X, y = define_X_y(df, columns_to_drop)
+    return X, y
+
+
+def print_data_info(X_train, X_test, y_train, y_test, features, df, working_path):
+    """Prints information about the datasets and features."""
+    # print the experiment path
+    print("Working path:", working_path)
+
+    print("Dataset for classification shape:", df.shape)
+
+    print("Dimension of X_train:", X_train.shape)
+    print("Dimension of X_test:", X_test.shape)
+    print("Dimension of y_train:", y_train.shape)
+    print("Dimension of y_test:", y_test.shape)
+    print("Features names:", features)
+
+    # print distribution of y_train and y_test
+    print("Distribution of y_train:", Counter(y_train))
+    print("Distribution of y_test:", Counter(y_test))
+
+def define_X_y(df, columns_to_drop):
+    """
+    Define X and y from the given DataFrame, dropping specified columns.
+
+    Parameters:
+        df (DataFrame): The DataFrame containing the data.
+        global_path (str): The path to the global directory.
+        columns_to_drop (list): List of column names to drop from the DataFrame.
+
+    Returns:
+        tuple: A tuple containing X (features) and y (target).
+    """
+    # Extract the target variable
+    y = df["gendna_type"]
+
+    # print the distribution of the target variable
+    #print("Distribution of the target variable:")
+    #print(y.value_counts())
+
+    # Get the list of columns to drop based on 'N' in the specified column
+    df.drop(columns=columns_to_drop, inplace=True)
+
+    # Convert X_df to numpy array
+    X = df.values
+
+    return X, y
+
+
+def fill_missing_values(df):
+    # Load the important variables file
+    df_vars = pd.read_excel(important_vars_path)
+
+    # Print columns not in the important variables list
+    missing_columns = [
+        col for col in df.columns if col not in df_vars["variable"].values
+    ]
+    # Fill missing values based on the important variables list
+    for index, row in df_vars.iterrows():
+        column = row["variable"]
+        na = row["NA"]
+        if column in df.columns:
+            if na == "998":
+                df[column].fillna(998, inplace=True)
+            # else:
+            # df[column].fillna(998, inplace=True)
+    return df
+
+def load_and_prepare_data():
+    """Load and prepare the DataFrame for classification."""
+    GLOBAL_DF_PATH = os.path.join(saved_result_path, "df", "df_Global_preprocessed.csv")
+
+    if not os.path.exists(GLOBAL_DF_PATH):
+        raise FileNotFoundError(f"File not found: {GLOBAL_DF_PATH}")
+
+    df = pd.read_csv(GLOBAL_DF_PATH)
+
+    # Display initial DataFrame information
+    nRow, nCol = df.shape
+    print(f'The DataFrame "df_preprocessed" contains {nRow} rows and {nCol} columns.')
+
+    # print("Columns:", df.columns)
+
+    # Remove rows where gendna is -998
+    df = df[df["gendna"] != -998]
+
+    # Preprocess target column, handle NaNs, and print DataFrame
+    df = process_gendna_column(df)
+    # df = fill_missing_values(df)
+
+    mt_DNA_patients = df[df["gendna_type"] == 0]
+    # print("Number of mtDNA patients:", mt_DNA_patients.shape[0])
+    # print("mtDNA patients:", mt_DNA_patients["subjid"].values)
+
+    return df, mt_DNA_patients
+
+
 
 
 def process_feature_selection(

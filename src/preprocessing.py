@@ -614,9 +614,9 @@ def add_top5_symptoms_columns(
     pmd_form_name,
 ):
 
-    # Define the column names outside the loop
+    # Define the column names for the top-5 symptoms
     top5_columns = [f"symp_on_{i}" for i in range(1, 6)]
-    all_symptoms_dfs = []  # List to store symptoms_df for each hospital
+    all_symptoms_dfs = []  # List to store symptoms DataFrame for each hospital
 
     for hospital_name in hospital_names:
         # Define file paths
@@ -646,21 +646,20 @@ def add_top5_symptoms_columns(
         merged_df["aas_aao_diff"] = merged_df["aao"] - merged_df["aas"]
 
         # Get top 5 symptoms closest in time to onset
+        grouped = merged_df.sort_values("aas_aao_diff", key=abs).groupby("subjid")
+
         top5_symptoms = (
-            merged_df.sort_values("aas_aao_diff", key=abs)
-            .groupby("subjid")
-            .head(5)
-            .groupby("subjid")["psterm__decod"]
-            .apply(lambda x: x.tolist())
-            .apply(lambda x: x + [None] * (5 - len(x)))  # Ensuring 5 entries
+            grouped["psterm__decod"]
+            .apply(lambda x: x.tolist()[:5])  # Get up to 5 symptoms
             .reset_index()
         )
 
-        # print top5_symptoms
-        # print(f"Top 5 symptoms for {hospital_name}:")
-        # print(top5_symptoms)
+        # Pad the lists to ensure 5 entries for each subjid
+        top5_symptoms["psterm__decod"] = top5_symptoms["psterm__decod"].apply(
+            lambda x: x + [None] * (5 - len(x))
+        )
 
-        # Convert to DataFrame and fill with NaN if less than 5 symptoms
+        # Convert to DataFrame
         symptoms_df = pd.DataFrame(
             top5_symptoms["psterm__decod"].tolist(),
             index=top5_symptoms["subjid"],
@@ -669,25 +668,19 @@ def add_top5_symptoms_columns(
 
         # Store the DataFrame
         all_symptoms_dfs.append(symptoms_df)
-        # print(f"Done processing symptoms for {hospital_name}")
 
     # Concatenate symptoms DataFrames and ensure unique rows
     symptoms_df_global = pd.concat(all_symptoms_dfs, axis=0).drop_duplicates()
-
-    # print the symptoms_df_global
-    # print(f"symptoms_df_global: {symptoms_df_global}")
 
     # Merge with the global preprocessed DataFrame
     df_preprocessed_global = df_preprocessed_global.merge(
         symptoms_df_global, left_on="subjid", right_index=True, how="left"
     )
 
-    # print the new columns of the df_preprocessed_global
+    # Print the new columns of the df_preprocessed_global
     print(
         f"Columns of the df_preprocessed_global after adding top5 symptoms: {df_preprocessed_global.columns}"
     )
-
-    # print the column
 
     # Drop duplicate rows based on 'subjid' and 'visdat'
     if df_preprocessed_global.duplicated(subset=["subjid", "visdat"]).any():
@@ -695,14 +688,6 @@ def add_top5_symptoms_columns(
         df_preprocessed_global = df_preprocessed_global.drop_duplicates(
             subset=["subjid", "visdat"]
         )
-
-    """
-    # print distribution of the top5 symptoms
-    for col in top5_columns:
-        print(f"Distribution for column {col}:")
-        print(df_preprocessed_global[col].value_counts())
-        print("\n")
-    """
 
     return df_preprocessed_global
 
@@ -811,12 +796,14 @@ def add_abnormalities_cols(df, mapping_abnormalities_path, mapping_symptoms_path
                 symptoms & hpo_values
             ):  # Check if there is any intersection between symptoms and hpo_values
                 df.at[index, col] = 1
+    '''
 
     # Print the distribution of each column in the final DataFrame
     for col in mapping_abnormalities.columns:
         print(f"Distribution for column {col}:")
         print(df[col].value_counts())
         print("\n")
+    '''
 
     return df
 
