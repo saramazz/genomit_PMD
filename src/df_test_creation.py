@@ -35,6 +35,7 @@ SURVEY_PATH = os.path.join(
     saved_result_path, "survey"
 )
 CLF_RESULTS_PATH = os.path.join(saved_result_path_classification,"saved_data")
+BEST_PATH = os.path.join(saved_result_path_classification, "best_model")
 
 # Ensure necessary directories exist
 os.makedirs(SURVEY_PATH, exist_ok=True)
@@ -109,50 +110,18 @@ def main():
     current_datetime = datetime.now().strftime("%Y%m%d_%H%M%S")
     setup_output(current_datetime)
     # Load and preprocess data
-    df = load_and_prepare_data()
-    X, y = feature_selection(df)
-    (
-        X_train,
-        X_test,
-        y_train,
-        y_test,
-        train_subjects,
-        test_subjects,
-        features,
-        kf,
-        scorer,
-        thr,
-        nFeatures,
-        num_folds,
-    ) = experiment_definition(X, y, df, SURVEY_PATH)
+    #load test subjects from CLF_RESULTS_PATH  test_subjects_final.pkl
 
-    #save X, y and the df in /home/saram/PhD/genomit_PMD/saved_results/classifiers_results/saved_data as pkl
-    joblib.dump(X, os.path.join(CLF_RESULTS_PATH, "X.pkl"))
-    joblib.dump(y, os.path.join(CLF_RESULTS_PATH, "y.pkl"))
+    test_subjects = joblib.load(os.path.join(CLF_RESULTS_PATH, "test_subjects_final.pkl"))
+    #print the size of the test subjects
+    print("Size of test subjects:", len(test_subjects))
 
-    #print dimension of X and y
-    print("Dimension of X:", X.shape)
-    print("Dimension of y:", y.shape)
-
-    #input("Press Enter to start the df_test creation...")
-
+    df_raw = pd.read_csv(GLOBAL_DF_PATH)
+    df_raw_test = df_raw[df_raw["subjid"].isin(test_subjects)]
 
     """
         Creation of the df_test not numerical with also additional columns
     """
-
-    #test_subjects = df.loc[df["subjid"].isin(X_test.index), "subjid"]
-
-    #print dimension of test subjects
-    print("Dimension of test subjects:", test_subjects.shape)
-
-    #print the test subjects
-    #print("Test subjects:", test_subjects)
-
-
-
-    #add the cols to the df_test from the original df
-    df_raw= pd.read_csv(GLOBAL_DF_PATH)
     
     #print dimension of df_raw
     print("Dimension of df_raw:", df_raw.shape)
@@ -195,7 +164,7 @@ def main():
 
     print(
         "df_not_numerical shape after gendna processing, filling NAs, dropping columns of X and adding some for more explainability:",
-        df.shape,
+        df_test.shape,
     )
 
     # print("df_test head():", df_test.head())
@@ -339,9 +308,9 @@ def main():
 
     print(df_test)
     # save in excel the df_test
-    df_test.to_excel(os.path.join(SURVEY_PATH, f"df_test_best.xlsx"))
+    df_test.to_csv(os.path.join(SURVEY_PATH, f"df_test_best.csv"))
 
-    print("df_test saved in df_test_best.xlsx")
+    print("df_test saved in df_test_best.xlsx in the survey folder")
 
 
 if __name__ == "__main__":

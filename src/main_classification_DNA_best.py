@@ -77,7 +77,12 @@ os.makedirs(BEST_PATH, exist_ok=True)
 def setup_output(current_datetime):
     """Set up output redirection to a log file."""
     # file_name = f"classification_reports_{current_datetime}_no_mrmr.txt"
-    file_name = f"classification_reports_best.txt"
+    #ask if clf or res 
+    choice=input("Press clf to start the classification or res to display the res...")
+    if choice=='clf':
+        file_name = f"classification_reports_best.txt"        
+    else:
+        file_name = f"classification_analysis_results.txt"    
     sys.stdout = open(os.path.join(BEST_PATH, file_name), "w")
 
 
@@ -283,6 +288,10 @@ def main():
        'resp', 'smoking', 'symp_on_1', 'symp_on_3', 'symp_on_4', 'va', 'wml']
     print("Features used in the classification:")
     print(selected_features)
+    #save the selected features to a text file
+    with open(os.path.join(BEST_PATH, "selected_features.txt"), "w") as f:
+        for item in selected_features:
+            f.write("%s\n" % item)
 
        # Assuming column names available, construct DataFrame
     X_test = pd.DataFrame(X_test, columns=features)  # 'all_column_names' should be defined
@@ -291,9 +300,58 @@ def main():
     X_test_selected = X_test[selected_features]
 
 
+    
+    '''
     perform_classification_best(X_test_selected, y_test, best_estimator, BEST_PATH, selected_features)
 
     print("Classification with the best classifier completed and results saved.")
+    '''
+
+    #Load the results and print them
+    results_file_path = os.path.join(BEST_PATH, "best_model_results.pkl")
+    with open(results_file_path, "rb") as f:
+        results = pickle.load(f)
+    
+    print("Results:")
+    print(results)
+
+    #read the feature importance data in the results
+    feature_importance_data = results["feature_importance_data"]
+    print("Feature Importance Data:")
+    print(feature_importance_data)
+
+    #print the distribution of the best 10 features important
+    top_10_features = feature_importance_data["top_10_features"]
+    print("Top 10 Features:")
+    print(top_10_features)
+    #print the distribution of the best 10 features important in a bar plot from the test set
+    #identify the test subjects in the df raw
+    df_raw = pd.read_csv(GLOBAL_DF_PATH)
+    df_raw_test = df_raw[df_raw["subjid"].isin(test_subjects)]
+
+
+
+    #create folder for the plots
+    os.makedirs(os.path.join(BEST_PATH, "TOP_feature_distributions"), exist_ok=True)
+    for col in top_10_features.keys():
+        sns.histplot(df_raw_test[col], kde=True)
+        plt.title(f"Distribution of {col}")
+        #save it to the folder
+        plt.savefig(os.path.join(BEST_PATH, "TOP_feature_distributions", f"{col}_distribution.png"))
+        plt.close()
+        #print the distribution of the feature
+        print(f"Feature: {col}")
+        print(df_raw_test[col].describe())
+        print("Distribution:")
+        print(df_raw_test[col].value_counts())
+        print("-----------------------------------")
+        print("\n")
+    #print that the plots are saved
+    print("Top 10 Feature Distributions saved in the folder TOP_feature_distributions")
+
+
+
+
 
 
 if __name__ == "__main__":

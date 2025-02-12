@@ -72,13 +72,11 @@ EXPERIMENT_PATH = os.path.join(
 os.makedirs(EXPERIMENT_PATH, exist_ok=True)
 
 
-
-
 def setup_output(current_datetime):
     """Set up output redirection to a log file."""
 
     # file_name = f"classification_reports_{current_datetime}_mrmr.txt"
-    file_name = f"classification_reports_RF_no_mrmr.txt"  # {current_datetime}_mrmr.txt"
+    file_name = f"classification_reports_mrmr_last.txt"  # {current_datetime}_mrmr.txt"
     sys.stdout = open(os.path.join(EXPERIMENT_PATH, file_name), "w")
 
 
@@ -279,7 +277,6 @@ def main():
 
     print("Starting the classification...")
 
-
     classifiers_l = {  # light
         "XGBClassifier": (
             XGBClassifier(),
@@ -327,54 +324,52 @@ def main():
     }
 
     classifiers = {
-    "XGBClassifier": (
-        XGBClassifier(),
-        {
-            "max_depth": [3, 6],  # Most impactful depths
-            "n_estimators": [50, 150],  # Reduced number of trees
-            "learning_rate": [0.01, 0.1],  # Wide range learning rates
-            "subsample": [0.8, 1.0],  # Essential variations
-            "colsample_bytree": [0.8],  # Stable choice
-            "reg_alpha": [0],  # Skip regularization for complexity
-            "reg_lambda": [1],  # Default value
-        },
-    ),
-    "DecisionTreeClassifier": (
-        DecisionTreeClassifier(),
-        {
-            "max_depth": [None, 10],  # Reasonable depth for variety
-            "min_samples_split": [2, 5],  # Balance between depth and split
-            "min_samples_leaf": [1, 3],  # Potential lesser leaves
-            "criterion": ["gini"],  # Focus on Gini
-            "max_features": [None, "sqrt"],  # Practical options
-            "splitter": ["best"],  # Prescribed option
-        },
-    ),   
-    
-    "SVM": (
-        SVC(),
-        {
-            "C": [0.1, 1],  # Removed extremes
-            "gamma": [0.01, 0.1],  # Focus on usable range
-            "kernel": ["rbf"],  # Default kernel
-        },
-    ),
-    "RandomForestClassifier": (
-        RandomForestClassifier(),
-        {
-            "n_estimators": [100, 150],  # Balanced between speed and accuracy
-            "max_depth": [None, 10],  # Allow some depth flexibility
-            "min_samples_split": [2, 5],  # Regular split thresholds
-            "min_samples_leaf": [1, 2],  # Slight variant in leaves
-            "max_features": ["sqrt"],  # Use of out-of-the-box
-            "bootstrap": [True],  # Regular setting
-            "criterion": ["gini"],  # Standard impurity measure
-        },
-    ),
-
+        "XGBClassifier": (
+            XGBClassifier(),
+            {
+                "max_depth": [3, 6],  # Most impactful depths
+                "n_estimators": [50, 150],  # Reduced number of trees
+                "learning_rate": [0.01, 0.1],  # Wide range learning rates
+                "subsample": [0.8, 1.0],  # Essential variations
+                "colsample_bytree": [0.8],  # Stable choice
+                "reg_alpha": [0],  # Skip regularization for complexity
+                "reg_lambda": [1],  # Default value
+            },
+        ),
+        "DecisionTreeClassifier": (
+            DecisionTreeClassifier(),
+            {
+                "max_depth": [None, 10],  # Reasonable depth for variety
+                "min_samples_split": [2, 5],  # Balance between depth and split
+                "min_samples_leaf": [1, 3],  # Potential lesser leaves
+                "criterion": ["gini"],  # Focus on Gini
+                "max_features": [None, "sqrt"],  # Practical options
+                "splitter": ["best"],  # Prescribed option
+            },
+        ),
+        "SVM": (
+            SVC(),
+            {
+                "C": [0.1, 1],  # Removed extremes
+                "gamma": [0.01, 0.1],  # Focus on usable range
+                "kernel": ["rbf"],  # Default kernel
+            },
+        ),
+        "RandomForestClassifier": (
+            RandomForestClassifier(),
+            {
+                "n_estimators": [100, 150],  # Balanced between speed and accuracy
+                "max_depth": [None, 10],  # Allow some depth flexibility
+                "min_samples_split": [2, 5],  # Regular split thresholds
+                "min_samples_leaf": [1, 2],  # Slight variant in leaves
+                "max_features": ["sqrt"],  # Use of out-of-the-box
+                "bootstrap": [True],  # Regular setting
+                "criterion": ["gini"],  # Standard impurity measure
+            },
+        ),
     }
 
-    '''
+    """
     #Best score: 0.7690024095808604
     classifiers = {
         "RandomForestClassifier": (
@@ -390,8 +385,7 @@ def main():
             },
         ),
     }
-    '''
-
+    """
 
     # define the settings of the experiment
     balancing_techniques = [
@@ -399,8 +393,8 @@ def main():
         "over",
         "under",
     ]
-    feature_selection_options = ["no", "pca", "select_from_model", "rfe"]  # ,MRMR
-    # feature_selection_options = ["mrmr","rfe"]  # ,MRMR
+    # feature_selection_options = ["no", "pca", "select_from_model", "rfe"]  # ,MRMR
+    feature_selection_options = ["mrmr"]  # ,MRMR
 
     # List to hold results of classifiers
     best_classifiers = []
@@ -419,14 +413,13 @@ def main():
         # Transform the test data with the same imputer
         X_test = imputer.transform(X_test)
 
-        
-        '''# Decrease
+        """# Decrease
         samples = 30
         X_train = X_train[:samples, :]
         X_test = X_test[:samples, :]
         y_train = y_train[:samples]
         y_test = y_test[:samples]
-        '''
+        """
 
         for feature_selection_option in feature_selection_options:
             (
@@ -529,4 +522,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

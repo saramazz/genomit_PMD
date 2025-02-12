@@ -8,6 +8,7 @@ import time
 import sys
 import pandas as pd
 import os
+import re
 
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../src")))
@@ -25,10 +26,11 @@ GLOBAL_PATH = os.path.dirname(parent_path)
 
 saved_result_path = os.path.join(GLOBAL_PATH, "saved_results")
 SURVEY_PATH = os.path.join(saved_result_path, "survey")
+BEST_PATH = os.path.join(saved_result_path, "classifiers_results/best_model")
 
 
 df_path = os.path.join(saved_result_path, "df", "df_Global_preprocessed.csv")
-df_test_path = os.path.join(SURVEY_PATH, "df_test_best.xlsx")
+df_test_path = os.path.join(SURVEY_PATH, "df_test_best.csv")
 important_vars_path = os.path.join(
     GLOBAL_PATH, "variables_mapping", "important_variables_huma.xlsx"
 )
@@ -46,9 +48,10 @@ print(
     f"The DataFrame df_raw 'df_preprocessed_Global' contains {nRow} rows and {nCol} columns."
 )
 
+
 # Load test DataFrame
 try:
-    df_test = pd.read_excel(df_test_path)
+    df_test = pd.read_csv(df_test_path)
     print(f"Loaded DataFrame: {df_test_path}")
 except FileNotFoundError:
     print(f"Error: File not found at {df_test_path}")
@@ -74,7 +77,7 @@ try:
 except FileNotFoundError:
     print(f"Error: File not found at {important_vars_path}")
     exit()
-
+"""
 # Determine columns to drop
 columns_to_drop = list(
     df_vars.loc[
@@ -97,6 +100,21 @@ additional_columns_to_drop += [
 
 # Drop specified columns
 columns_to_drop += additional_columns_to_drop
+"""
+
+# load the selected features selected_features.txt
+selected_features_path = os.path.join(BEST_PATH, "selected_features.txt")
+with open(selected_features_path, "r") as file:
+    selected_features = file.read().splitlines()
+    print("Selected features:", selected_features)
+
+# add subject id to the selected features
+selected_features.append("subjid")
+
+# Drop columns not in selected features
+columns_to_drop = [col for col in df_raw.columns if col not in selected_features]
+df = df_raw.drop(columns=columns_to_drop, errors="ignore")
+
 
 # Filter `df_raw` by `subject_id_test` and display new shape
 subject_id_test = df_test["Subject id"].tolist()
@@ -112,27 +130,26 @@ print("Columns after cleaning:", df.columns)
 """
 CREATE PATIENT DESCRIPTION
 """
-
-
 # print the cleaned dataframe
 print("Cleaned DataFrame:")
 # print the size of the dataframe
 print(df.shape)
 print(df)
-
 """
 human friendly columns
 """
 
 # in 'sex' column of the replace f with Femminile, m with Maschile
 # Replace 'f' with 'Femminile' and 'm' with 'Maschile' in the 'sex' column
-df["sex"] = df["sex"].replace({"f": "Femminile", "m": "Maschile"})
+if "sex" in df.columns:
+    df["sex"] = df["sex"].replace({"f": "Femminile", "m": "Maschile"})
 
 
 # df = fill_missing_values(df)
 
-# Round the age to the nearest integer
-df["aao"] = df["aao"].round()
+if "aao" in df.columns:
+    # Round the age to the nearest integer
+    df["aao"] = df["aao"].round()
 
 
 # bmi
@@ -148,7 +165,8 @@ def bmi_category(bmi_value):
         return "Obeso"
 
 
-df["bmi"] = df["bmi"].apply(bmi_category)
+if "bmi" in df.columns:
+    df["bmi"] = df["bmi"].apply(bmi_category)
 
 # see the df_vars content_human columns and for the variables that has si/no,  replace 1 with Si and 0 with No
 
@@ -197,10 +215,11 @@ cc_mapping = {
     "HP:0025285": "Aggravato",  # aggravated by
 }
 
-# Apply the mapping to the 'cc' column
-df["cc"] = df["cc"].map(cc_mapping)
-print("Clinical course mapping applied to df")
-print(df["cc"])
+if "cc" in df.columns:
+    # Apply the mapping to the 'cc' column
+    df["cc"] = df["cc"].map(cc_mapping)
+    print("Clinical course mapping applied to df")
+    print(df["cc"])
 
 
 """
@@ -240,11 +259,12 @@ mapping_symptoms_path = os.path.join(
 )
 
 # Remove IT patients
-# df = df[~df['subjid'].str.contains('IT')]
 print(df.columns)
 # add abnormalities from HPO
 df = add_abnormalities_cols(df, mapping_abnormalities_path, mapping_symptoms_path)
-print(df.columns)
+# check the cols of the df_abn and mantain only the abn that are in the selected features
+df = df[selected_features]
+
 # print dimensions and columns of the df
 print(f"Cleaned DataFrame dimensions after affing abnormalities: {df.shape}")
 
@@ -270,7 +290,14 @@ column_mapping = {
 # Reverse the mapping dictionary to map from abbreviated names to full descriptions
 reversed_mapping = {v: k for k, v in column_mapping.items()}
 
-# Rename the columns of the DataFrame
+# Rename the columns of the DataFrame when the column name is in the mapping dictionary
+if set(column_mapping.keys()).issubset(df.columns):
+    df = df.rename(columns=column_mapping)
+    print("Abnormalities added to df")
+
+
+
+
 df = df.rename(columns=reversed_mapping)
 
 print("Abnormalities added to df")
@@ -294,8 +321,6 @@ mapping_symptoms = pd.read_excel(symptoms_mapping_path)
 mapping_symptoms["psterm__decod"] = mapping_symptoms["psterm__decod"].str.replace(
     "HP:", ""
 )
-import re
-
 
 # Define a function to extract text between single quotes
 def extract_text(text):
@@ -303,11 +328,17 @@ def extract_text(text):
     return match.group(1) if match else None
 
 
+#print the association_psterm__modify column
+#print("Mapping symptoms:\n", mapping_symptoms)
 # Apply the function to the 'associated_psterm__modify' column
 mapping_symptoms["associated_psterm__modify"] = mapping_symptoms[
     "associated_psterm__modify"
 ].apply(extract_text)
-# print("Mapping symptoms:\n", mapping_symptoms)
+mapping_symptoms["psterm__decod"] = mapping_symptoms["psterm__decod"].apply(
+    lambda x: float(str(x).lstrip("0")) if str(x).lstrip("0") else 0.0
+)
+
+print("Mapping symptoms:\n", mapping_symptoms)
 
 # Reset index of df_test to ensure unique index values
 df.reset_index(drop=True, inplace=True)
@@ -319,6 +350,13 @@ symptoms_dict = mapping_symptoms.set_index("psterm__decod")[
 ].to_dict()
 for col in columns_with_symptoms:
     df[col] = df[col].map(symptoms_dict)
+
+#print the  values of the columns with symptoms
+for col in columns_with_symptoms:
+    print("unique values in the column", col, df[col].value_counts())
+
+
+
 
 # substitute the symptom names with the italian translation
 mapping_en_ita_hpo_path = os.path.join(
@@ -342,6 +380,35 @@ for col in columns_with_symptoms:
 # Display the modified DataFrame to verify the changes
 # print("Modified df_test with symptom names:\n", df_test[columns_with_symptoms])
 print("sobsituted HPO code with the name of the symptom in df")
+
+
+
+
+"""
+create a unique list of symptoms
+"""
+# Step 1: Identify columns that contain 'symp_on'
+symptom_columns = [col for col in df.columns if "symp_on" in col]
+
+#print the symptom columns content
+print("Symptom columns content:\n", df[symptom_columns])
+
+# Step 2: Create a new column with consolidated symptoms
+df["Sintomi all Insorgenza"] = df[symptom_columns].apply(
+    lambda row: ", ".join(row.dropna().astype(str)), axis=1
+)
+
+#print the new column
+print(df["Sintomi all Insorgenza"])
+
+# Step 3: Remove the original symptom columns
+df = df.drop(columns=symptom_columns)
+# print that the new column was created
+print("New column 'all_symptoms' created in df")
+
+
+
+
 
 # Definizione della nuova mappatura per pssev
 pssev_mapping = {
@@ -375,26 +442,12 @@ rename_mapping = {
 
 
 # apply the mapping to the column pimgres
-df["pimgres"] = df["pimgres"].map(rename_mapping)
-# print("pimgres updated", df_test["pimgres"])
-print("pimgres mapping applied to dft")
+if "pimgres" in df.columns:
+    df["pimgres"] = df["pimgres"].map(rename_mapping)
+    # print("pimgres updated", df_test["pimgres"])
+    print("pimgres mapping applied to df")
 
 
-"""
-create a unique list of symptoms
-"""
-# Step 1: Identify columns that contain 'symp_on'
-symptom_columns = [col for col in df.columns if "symp_on" in col]
-
-# Step 2: Create a new column with consolidated symptoms
-df["Sintomi all Insorgenza"] = df[symptom_columns].apply(
-    lambda row: ", ".join(row.dropna().astype(str)), axis=1
-)
-
-# Step 3: Remove the original symptom columns
-df = df.drop(columns=symptom_columns)
-# print that the new column was created
-print("New column 'all_symptoms' created in df")
 
 
 """
@@ -444,11 +497,15 @@ df = df[ordered_columns]
 print("Columns renamed in df_test:\n", df.columns)
 print(df)
 
+#substitute 0 with No in the df
+df = df.astype(object).replace(0, "No")
+
+print("0 substituted with No in df")
 # save in csv the resultin df_test
 df.to_csv(
     os.path.join(SURVEY_PATH, "df_test_human_friendly_best.csv"),
     index=False,
 )
 
-#print that the df_test was saved
-print("df_test saved in csv as df_test_human_friendly_best.csv in the survey folder") 
+# print that the df_test was saved
+print("df_test saved in csv as df_test_human_friendly_best.csv in the survey folder")

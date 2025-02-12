@@ -77,7 +77,7 @@ def process_patient_data(patient_number, patient_data):
             pd.notna(value)
             and column != "id paziente"
             and value
-            not in {"998.0", "998", 998, "997.0", "997", 997, "9999", "9999.0", 9999}
+            not in {"998.0", "998", 998, "997.0", "997", 997, "9999", "9999.0", 9999, "-998.0", "-998", -998, "No"}
         ):
 
             # Append each field as "Key: Value" in a readable format
@@ -125,7 +125,7 @@ from datetime import datetime
 def create_prompt(row):
     prompt = (
         "You are a helpful assistant tasked with creating patient descriptions based on the provided data. "
-        "Do not consider NaN, 998, 997, or 9999 values, and respond in Italian, do not include the id of the patient. Do not add other text to the answer "
+        "Do not consider NaN, No, -998, 998, 997, or 9999 values, and respond in Italian, do not include the id of the patient. Do not add other text to the answer "
         "Use integers for numbers (e.g., use 4 instead of 4.0)."
         "\n\n"
         "Data to be elaborated:\n"

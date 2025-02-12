@@ -26,14 +26,17 @@ parent_path = os.path.dirname(script_directory)
 GLOBAL_PATH = os.path.dirname(parent_path)
 
 
+
 saved_result_path = os.path.join(GLOBAL_PATH, "saved_results")
 SURVEY_PATH = os.path.join(saved_result_path, "survey")
+BEST_PATH = os.path.join(saved_result_path, "classifiers_results/best_model")
+
 
 groups_path = os.path.join(SURVEY_PATH, "clinician_patient_mapping.csv")
 
 
 df_path = os.path.join(saved_result_path, "df", "df_Global_preprocessed.csv")
-df_test_path = os.path.join(SURVEY_PATH, "df_test_best.xlsx")
+df_test_path = os.path.join(SURVEY_PATH, "df_test_best.csv")
 important_vars_path = os.path.join(
     GLOBAL_PATH, "variables_mapping", "important_variables.xlsx"
 )
@@ -54,7 +57,7 @@ print(
 
 # Load test DataFrame
 try:
-    df_test = pd.read_excel(df_test_path)
+    df_test = pd.read_csv(df_test_path)
     print(f"Loaded DataFrame: {df_test_path}")
 except FileNotFoundError:
     print(f"Error: File not found at {df_test_path}")
@@ -127,7 +130,7 @@ print(f"Percentage - Adults: {percentage_adults:.2f}%, Young: {percentage_young:
 """
 CREATE TEST DATAFRAME WITH SELECTED FEATURES
 """
-
+'''
 # Load important variables for classification
 try:
     df_vars = pd.read_excel(important_vars_path)
@@ -161,7 +164,19 @@ columns_to_drop += additional_columns_to_drop
 df = df_raw.drop(columns=columns_to_drop, errors="ignore").fillna(
     998
 )  # fill missing values with 998
+'''
+#load the selected features selected_features.txt
+selected_features_path = os.path.join(BEST_PATH, "selected_features.txt")
+with open(selected_features_path, "r") as file:
+    selected_features = file.read().splitlines()
+    print("Selected features:", selected_features)
 
+#add subject id to the selected features
+selected_features.append("subjid")
+
+# Drop columns not in selected features
+columns_to_drop = [col for col in df_raw.columns if col not in selected_features]
+df = df_raw.drop(columns=columns_to_drop, errors="ignore")
 # Display the cleaned DataFrame's dimensions and columns
 print(f"Cleaned DataFrame dimensions: {df.shape}")
 print("Columns after cleaning:", df.columns)
