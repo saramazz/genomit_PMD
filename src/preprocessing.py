@@ -796,14 +796,14 @@ def add_abnormalities_cols(df, mapping_abnormalities_path, mapping_symptoms_path
                 symptoms & hpo_values
             ):  # Check if there is any intersection between symptoms and hpo_values
                 df.at[index, col] = 1
-    '''
+    """
 
     # Print the distribution of each column in the final DataFrame
     for col in mapping_abnormalities.columns:
         print(f"Distribution for column {col}:")
         print(df[col].value_counts())
         print("\n")
-    '''
+    """
 
     return df
 

@@ -107,7 +107,7 @@ def rankfeatures(X_train, Y_train, frmethod, nFolds, nFeatures, thr, kf):
 
     # Process feature aggregation
     top_features_all_ = np.asarray(top_features_all, dtype=np.float32)
-    print('Found top_features_all_', top_features_all_)
+    print("Found top_features_all_", top_features_all_)
 
     all_top_features = np.unique(top_features_all_)
     feature_scores = np.empty([len(all_top_features), 2], dtype=int)
@@ -118,14 +118,13 @@ def rankfeatures(X_train, Y_train, frmethod, nFolds, nFeatures, thr, kf):
         feature_scores[ii, :] = [ff, score]
 
     sorted_scores = np.argsort(feature_scores[:, 1])[::-1]
-    top_features = feature_scores[sorted_scores[:int(thr * X_train.shape[1])], 0]
+    top_features = feature_scores[sorted_scores[: int(thr * X_train.shape[1])], 0]
 
     print("Top 25% Features:")
     print(top_features)
     print("Number of Top Features:", len(top_features))
-    
-    return top_features
 
+    return top_features
 
 
 # Define a function to calculate the distribution of a categorical column
@@ -144,6 +143,7 @@ def calculate_distribution(df, column_name, mapping):
     }
     return distribution
 
+
 # Define a mapping function to assign 'gendna_type'
 def assign_gendna_type(value):
     if value in [4, 6, 8]:
@@ -151,8 +151,8 @@ def assign_gendna_type(value):
     elif value in [5, 7]:
         return "mtDNA"
     else:
-        #print the value
-        #print("Value of gendna: ", value)
+        # print the value
+        # print("Value of gendna: ", value)
         return "Unknown"  # Use an explicit category or designate a special case
 
 
@@ -236,14 +236,16 @@ def process_gendna_column(df):
 
     # Convert 'gendna_type' into numerical values
     # Here we assume "Unknown" is not required further; adjust as needed
-    df_processed["gendna_type_num"] = df_processed["gendna_type"].replace({
-        "mtDNA": 0,
-        "nDNA": 1
-        # Optionally, you might also handle "Unknown" here if it remains
-    })
-    #remove Unknown patienta
+    df_processed["gendna_type_num"] = df_processed["gendna_type"].replace(
+        {
+            "mtDNA": 0,
+            "nDNA": 1,
+            # Optionally, you might also handle "Unknown" here if it remains
+        }
+    )
+    # remove Unknown patienta
     df_processed = df_processed[df_processed["gendna_type"] != "Unknown"]
-    #print how many unknown patients were removed
+    # print how many unknown patients were removed
     print("Number of Unknown patients removed: ", len(df) - len(df_processed))
 
     # Plot distribution of 'gendna_type'
@@ -267,10 +269,7 @@ def process_gendna_column(df):
     else:
         print("All missing values have been successfully filled.")
 
-
     return df_processed
-
-
 
 
 def add_patients_to_reach_179(test_subjects_ids, df, mt_DNA_patients):
@@ -411,16 +410,14 @@ def experiment_definition(X, y, X_df, saving_path, mt_DNA_patients, num_folds=5)
         # drop gendna_type
         # X_df = X_df.drop(columns=["gendna_type"])
 
-        #print the y distribution
+        # print the y distribution
         print("Y distribution:")
         print(y.value_counts())
-
-
 
         X_train_df, X_test_df = X_df.loc[train_indices], X_df.loc[test_indices]
         y_train, y_test = y.loc[train_indices], y.loc[test_indices]
 
-        #print the y_train distribution
+        # print the y_train distribution
         print("Y_train distribution:")
         print(y_train.value_counts())
 
@@ -975,6 +972,7 @@ def print_data_info(X_train, X_test, y_train, y_test, features, df, working_path
     print("Distribution of y_train:", Counter(y_train))
     print("Distribution of y_test:", Counter(y_test))
 
+
 def define_X_y(df, columns_to_drop):
     """
     Define X and y from the given DataFrame, dropping specified columns.
@@ -991,8 +989,8 @@ def define_X_y(df, columns_to_drop):
     y = df["gendna_type"]
 
     # print the distribution of the target variable
-    #print("Distribution of the target variable:")
-    #print(y.value_counts())
+    # print("Distribution of the target variable:")
+    # print(y.value_counts())
 
     # Get the list of columns to drop based on 'N' in the specified column
     df.drop(columns=columns_to_drop, inplace=True)
@@ -1022,9 +1020,13 @@ def fill_missing_values(df):
             # df[column].fillna(998, inplace=True)
     return df
 
-def load_and_prepare_data():
+
+def load_and_prepare_data(GLOBAL_DF_PATH):
     """Load and prepare the DataFrame for classification."""
-    GLOBAL_DF_PATH = os.path.join(saved_result_path, "df", "df_Global_preprocessed.csv")
+    #GLOBAL_DF_PATH = os.path.join(saved_result_path, "df", "df_Global_preprocessed.csv")
+
+    #print the path
+    print("Global DataFrame path:", GLOBAL_DF_PATH)
 
     if not os.path.exists(GLOBAL_DF_PATH):
         raise FileNotFoundError(f"File not found: {GLOBAL_DF_PATH}")
@@ -1049,8 +1051,6 @@ def load_and_prepare_data():
     # print("mtDNA patients:", mt_DNA_patients["subjid"].values)
 
     return df, mt_DNA_patients
-
-
 
 
 def process_feature_selection(
@@ -1208,6 +1208,7 @@ def process_feature_selection(
             print("Selected Features:")
             print(selected_features)
             print("Number of Selected Features:", len(selected_features))
+            
 
         except Exception as e:
             print(f"Error during feature selection: {e}")
@@ -1249,8 +1250,47 @@ def process_feature_selection(
             param_grid_selected = param_grid
             pipeline_selected = pipeline
 
+    elif feature_selection == "mrmr_selected":
+        selected_features = [
+            "ear_voice_abn",
+            "lac",
+            "eye_abn",
+            "card_abn",
+            "symp_on_5",
+            "internal_abn",
+            "va",
+            "ecgh",
+            "genit_breast_abn",
+            "sex",
+            "ecg",
+            "symp_on_3",
+            "hba1c",
+            "bmi",
+        ]
+        X_df = X_df[selected_features]
+        X_df.reset_index(drop=True, inplace=True)
+
+        # Check if X_train is a numpy array and convert it to DataFrame if necessary
+        if isinstance(X_train, np.ndarray):
+            X_train = pd.DataFrame(X_train)
+            X_train.reset_index(drop=True, inplace=True)
+
+        # Select rows based on the index and convert it back to numpy array
+        X_train_selected = X_df.loc[X_train.index].values
+
+        # Do the same for X_test
+        if isinstance(X_test, np.ndarray):
+            X_test = pd.DataFrame(X_test)
+            X_test.reset_index(drop=True, inplace=True)
+
+        X_test_selected = X_df.loc[X_test.index].values
+
+        param_grid_selected = param_grid
+        pipeline_selected = pipeline
+
     else:
         # No feature selection applied
+
         X_train_selected = X_train
         X_test_selected = X_test
         param_grid_selected = param_grid

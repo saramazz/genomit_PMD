@@ -80,6 +80,11 @@ if Input=="y":
     )
     BEST_PATH = os.path.join(saved_result_path_classification, "best_model_all")
     VERSION = "20250217_122843"
+
+#Print best path and experiment path
+print("Best path: ", BEST_PATH)
+print("Experiment path: ", EXPERIMENT_PATH)
+
     
 
 # Ensure necessary directories exist
@@ -253,7 +258,7 @@ def main():
     current_datetime = datetime.now().strftime("%Y%m%d_%H%M%S")
     setup_output(current_datetime)
     # Load and preprocess data
-    df, mt_DNA_patients = load_and_prepare_data()
+    df, mt_DNA_patients = load_and_prepare_data(GLOBAL_DF_PATH)
 
     X, y = feature_selection(df)
     (
@@ -291,8 +296,9 @@ def main():
     )
 
     print("Starting the classification...")
-
     '''
+
+
     #if using the best model file
     best_model_path = os.path.join(EXPERIMENT_PATH, f"best_classifier_{VERSION}.pkl")
     with open(best_model_path, "rb") as f:
@@ -308,13 +314,14 @@ def main():
         print("Best Parameters:", best_params)
     '''
 
+
     
 
     classifiers={
                 "XGBClassifier":(XGBClassifier(),
             {
-                "max_depth": [3],  # Most impactful depths
-                "n_estimators": [150],  # Reduced number of trees
+                "max_depth": [6],  # Most impactful depths
+                "n_estimators": [50],  # Reduced number of trees
                 "learning_rate": [0.1],  # Wide range learning rates
                 "subsample": [1.0],  # Essential variations
                 "colsample_bytree": [0.8],  # Stable choice
@@ -329,7 +336,7 @@ def main():
         """adding the selector"""
 
         
-        selector = SelectFromModel(estimator=clf_model)
+        selector = RFE(estimator=clf_model)
         X_train = selector.fit_transform(X_train, y_train)
         X_test = selector.transform(X_test)
 

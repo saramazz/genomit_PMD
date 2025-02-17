@@ -266,7 +266,7 @@ plot_phenotype_distribution(df, "clindiag__decod", saved_result_path)
 process_datetime_column(df, "psstdat__c")
 process_datetime_column(df, "visdat")
 
-df = df[~df["gendna"].isin([2, 3])]
+df = df[~df["gendna"].isin([2, 3])] # remove the patients with 2 or 3 in gendna
 df["gene"].replace("MTHFR", np.nan, inplace=True)
 df["gene"].replace("twincle", "TWNK", inplace=True)
 
@@ -351,16 +351,20 @@ patients_with_all_nan.to_csv(
 print("Checking if symp_on_1 has nan values...")
 print(df["symp_on_1"].isnull().sum())
 
-# remove patients with nan in symp_on_1
-df = df[~df["symp_on_1"].isnull()]
-
-# remove the patients with all nan in top 5 symptoms
-df = df[~df["subjid"].isin(patients_with_all_nan["subjid"])]
-# print the new dimension of the df
-nRow, nCol = df.shape
-print(
-    f"DataFrame dimensions after removing patients with all nan in top 5 symptoms: {nRow} rows, {nCol} columns"
-)
+#ask if remove patients with all nan in top 5 symptoms
+answ=input("Do you want to remove patients with all nan in top 5 symptoms or mantain all? all to not remove or red to remove: ")
+if 'red' in answ:
+    # remove patients with nan in symp_on_1
+    df = df[~df["symp_on_1"].isnull()]
+    # remove the patients with all nan in top 5 symptoms
+    df = df[~df["subjid"].isin(patients_with_all_nan["subjid"])]
+    # print the new dimension of the df
+    nRow, nCol = df.shape
+    print(
+        f"DataFrame dimensions after removing patients with all nan in top 5 symptoms: {nRow} rows, {nCol} columns"
+    )
+else:
+    print("Patients with all nan in top 5 symptoms are not removed.")
 
 # input("Press Enter to proceed with the script...")
 
@@ -387,7 +391,7 @@ print("Plotting missing values...")
 plot_missing_values(
     df,
     os.path.join(global_path, "saved_results/distribution_variables"),
-    "Histogram_MissingValues_df_Global.png",
+    f"Histogram_MissingValues_df_Global_{answ}.png",
 )
 
 print("Script execution completed.")
@@ -411,15 +415,21 @@ print("Saving preprocessed DataFrame...")
 # print the dimension of the df
 nRow, nCol = df.shape
 print(f"Final DataFrame dimensions: {nRow} rows, {nCol} columns")
-df.to_pickle(saved_result_path + "/df_Global_preprocessed.pkl")
-
 print("Creating Excel version of the DataFrame...")
-df.to_csv(saved_result_path + "/df_Global_preprocessed.csv", index=False)
 
 print("Converting DataFrame to numerical format...")
 df_num = convert_to_numerical(df)
 # print the dimension of the df
 nRow, nCol = df_num.shape
 print(f"Numerical DataFrame dimensions: {nRow} rows, {nCol} columns")
-df_num.to_pickle(os.path.join(saved_result_path, "df_num_Global.pkl"))
-df_num.to_csv(saved_result_path + "/df_Global_num.csv", index=False)
+#Save the numerical DataFrame
+if answ == 'all':
+    df.to_pickle(saved_result_path + "/df_Global_preprocessed_all.pkl")
+    df.to_csv(saved_result_path + "/df_Global_preprocessed_all.csv", index=False)
+    df_num.to_pickle(os.path.join(saved_result_path, "df_num_Global_all.pkl"))
+    df_num.to_csv(saved_result_path + "/df_Global_num.csv_all", index=False)
+else:
+    df.to_pickle(saved_result_path + "/df_Global_preprocessed.pkl")
+    df.to_csv(saved_result_path + "/df_Global_preprocessed.csv", index=False)
+    df_num.to_pickle(os.path.join(saved_result_path, "df_num_Global.pkl"))
+    df_num.to_csv(saved_result_path + "/df_Global_num.csv", index=False)

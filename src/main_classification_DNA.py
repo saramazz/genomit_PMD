@@ -68,6 +68,15 @@ EXPERIMENT_PATH = os.path.join(
     saved_result_path_classification, "experiments_all_models"
 )
 
+#ask if consider patients with no sympthoms
+Input=input("Do you want to consider patients with no symptoms? (y/n)")
+if Input=="y":
+    GLOBAL_DF_PATH = os.path.join(saved_result_path, "df", "df_Global_preprocessed_all.csv")
+    EXPERIMENT_PATH = os.path.join(
+        saved_result_path_classification, "experiments_all_models_all"
+    )
+    
+
 # Ensure necessary directories exist
 os.makedirs(EXPERIMENT_PATH, exist_ok=True)
 
@@ -76,7 +85,7 @@ def setup_output(current_datetime):
     """Set up output redirection to a log file."""
 
     # file_name = f"classification_reports_{current_datetime}_mrmr.txt"
-    file_name = f"classification_reports_mrmr_last.txt"  # {current_datetime}_mrmr.txt"
+    file_name = f"classification_reports_no_mrmr.txt"  # {current_datetime}_mrmr.txt"
     sys.stdout = open(os.path.join(EXPERIMENT_PATH, file_name), "w")
 
 
@@ -246,7 +255,7 @@ def main():
     current_datetime = datetime.now().strftime("%Y%m%d_%H%M%S")
     setup_output(current_datetime)
     # Load and preprocess data
-    df, mt_DNA_patients = load_and_prepare_data()
+    df, mt_DNA_patients = load_and_prepare_data(GLOBAL_DF_PATH)
     X, y = feature_selection(df)
     (
         X_train,
@@ -323,7 +332,7 @@ def main():
         ),
     }
 
-    classifiers = {
+    classifiers= {
         "XGBClassifier": (
             XGBClassifier(),
             {
@@ -393,8 +402,14 @@ def main():
         "over",
         "under",
     ]
-    # feature_selection_options = ["no", "pca", "select_from_model", "rfe"]  # ,MRMR
-    feature_selection_options = ["mrmr"]  # ,MRMR
+    feature_selection_options = [
+        "no",
+        "pca",
+        "select_from_model",
+        "rfe",
+        #"mrmr_selected",
+    ]  # ,MRMR
+    # feature_selection_options = [mrmr]  # ,MRMR mrmr_selected means to give in input the list of feature calculated from mrmr in previous steps
 
     # List to hold results of classifiers
     best_classifiers = []
