@@ -1,353 +1,305 @@
 import torch
 import torch.nn as nn
-from torch.utils.data import DataLoader, TensorDataset, random_split
-import numpy as np
-
-import sys
-from datetime import datetime
-
+import torch.optim as optim
+from torch.utils.data import DataLoader, TensorDataset
 from sklearn.metrics import classification_report, confusion_matrix
-from imblearn.over_sampling import SMOTE
 from imblearn.under_sampling import RandomUnderSampler
+from sklearn.preprocessing import MinMaxScaler
+from imblearn.over_sampling import SMOTE
 from collections import Counter
+from datetime import datetime
+from itertools import combinations
+from sklearn.model_selection import KFold, train_test_split
+import torch.multiprocessing as mp
 
-from config import (
-    global_path,
-    saved_result_path_classification,
-    saved_result_path_classification_models,
-)
-from utilities import *
+from config import (global_path, saved_result_path_classification, saved_result_path_classification_models,)
 from preprocessing import *
 from processing import *
+from utilities import *
 from plotting import *
 
-# Standard library imports
-import os
-import numpy as np
 import pandas as pd
+import numpy as np
+import random
+import json
+import ast
+import sys
+import re
+import os
 
-np.random.seed(42)
+# Set a random seed for reproducibility
+random_state = 42
+random.seed(random_state)
+np.random.seed(random_state)
+torch.manual_seed(random_state)
+torch.cuda.manual_seed(random_state)
+torch.cuda.manual_seed_all(random_state)
+torch.backends.cudnn.deterministic = True
+torch.backends.cudnn.benchmark = False
+
+# Check for GPU
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-print(f"Device: {device}")
-
-######################################## Pytorch Models ########################################
-# MLP model
-class MLP_model(nn.Module):
-    def __init__(self, input_dim, hidden_layer, activation_func):
-        super(MLP_model, self).__init__()
-        self.layer1 = nn.Linear(input_dim, 56)
-        self.batch_norm = nn.BatchNorm1d(56)
-        self.dropout = nn.Dropout(0.2)
-        self.activation_func = self.get_activation_func(activation_func)
-        self.layer2 = nn.Linear(56, hidden_layer)
-        self.batch_norm2 = nn.BatchNorm1d(hidden_layer)
-        self.dropout2 = nn.Dropout(0.2)
-        self.layer3 = nn.Linear(hidden_layer, 1)
-        self.sigmoid = nn.Sigmoid()
-
-    def get_activation_func(self, activation_func):
-        if activation_func == "relu":
-            return nn.ReLU()
-        elif activation_func == "tanh":
-            return nn.Tanh()
-        elif activation_func == "sigmoid":
-            return nn.Sigmoid()
-        elif activation_func == "silu":
-            return nn.SiLU()
-        elif activation_func == "gelu":
-            return nn.GELU()
-        elif activation_func == "leaky_relu":
-            return nn.LeakyReLU()
-        else:
-            raise ValueError(f"Unsupported activation function: {activation_func}")
-
-    def forward(self, x):
-        x = self.layer1(x)
-        x = self.batch_norm(x)
-        x = self.activation_func(x)
-        x = self.dropout(x)
-        x = self.layer2(x)
-        x = self.batch_norm2(x)
-        x = self.activation_func(x)
-        x = self.dropout2(x)
-        x = self.layer3(x)
-        x = self.sigmoid(x)
-        return x
-
-# DNN model
-class DNN_model(nn.Module):
-    def __init__(self, input_dim, hidden_layer, activation_func):
-        super(DNN_model, self).__init__()
-        self.layer1 = nn.Linear(input_dim, 56)
-        self.batch_norm = nn.BatchNorm1d(56)
-        self.dropout = nn.Dropout(0.2)
-        self.activation_func = self.get_activation_func(activation_func)
-        self.hidden_layers = nn.ModuleList()
-        self.batch_norms = nn.ModuleList()
-        self.dropouts = nn.ModuleList()
-        for i in range(len(hidden_layer)):
-            if i == 0:
-                self.hidden_layers.append(nn.Linear(56, hidden_layer[i]))
-                self.batch_norms.append(nn.BatchNorm1d(hidden_layer[i]))
-                self.dropouts.append(nn.Dropout(0.2))
-            else:
-                self.hidden_layers.append(nn.Linear(hidden_layer[i-1], hidden_layer[i]))
-                self.batch_norms.append(nn.BatchNorm1d(hidden_layer[i]))
-                self.dropouts.append(nn.Dropout(0.2))
-        self.layerOut = nn.Linear(hidden_layer[-1], 1)
-        self.sigmoid = nn.Sigmoid()
-
-    def get_activation_func(self, activation_func):
-        if activation_func == "relu":
-            return nn.ReLU()
-        elif activation_func == "tanh":
-            return nn.Tanh()
-        elif activation_func == "sigmoid":
-            return nn.Sigmoid()
-        elif activation_func == "silu":
-            return nn.SiLU()
-        elif activation_func == "gelu":
-            return nn.GELU()
-        elif activation_func == "leaky_relu":
-            return nn.LeakyReLU()
-        else:
-            raise ValueError(f"Unsupported activation function: {activation_func}")
-        
-    def forward(self, x):
-        x = self.layer1(x)
-        x = self.batch_norm(x)
-        x = self.activation_func(x)
-        x = self.dropout(x)
-        for i, layer in enumerate(self.hidden_layers):
-            x = layer(x)
-            x = self.batch_norms[i](x)
-            x = self.activation_func(x)
-            x = self.dropouts[i](x)
-        x = self.layerOut(x)
-        x = self.sigmoid(x)
-        return x
-################################################################################
-
-# Evaluate and print classification reports and confusion matrices
-def evaluate_and_print_results(y_train_pred, y_train, y_test_pred, y_test, activation_func, hidden_layer, learning_rate):
-    y_train_pred = y_train_pred.cpu().numpy().astype("int32")
-    y_train = y_train.cpu().numpy().astype("int32")
-    y_test_pred = y_test_pred.cpu().numpy().astype("int32")
-    y_test = y_test.cpu().numpy().astype("int32")
-
-    print("\nParameters: \n\tActivation Function: ", activation_func, "\n\tHidden Layer: ", hidden_layer, "\n\tLearning Rate: ", learning_rate)
-    print("\nTraining Set Performance:")
-    print(classification_report(y_train, y_train_pred))
-    print(confusion_matrix(y_train, y_train_pred))
-
-    print("\nTesting Set Performance:")
-    print(classification_report(y_test, y_test_pred))
-    print(confusion_matrix(y_test, y_test_pred))
 
 # Define data paths
 saving_path = os.path.join(saved_result_path_classification, "saved_data")
-df_X_y_path = os.path.join(saving_path, "df_X_y.pkl")
-config_path = os.path.join(saved_result_path,
-    "classifiers_results/experiments_all_models/classifier_configuration.pkl",
-)
-
+df_path = os.path.join(saving_path, "dataset_new_updated.csv")
 saved_result = os.path.join(saved_result_path_classification, "ML")
+
 # create the directory for the saved results
 if not os.path.exists(saved_result):
     os.makedirs(saved_result)
 
 # Load the dataset and perform preprocessing as previously defined
-df = pd.read_pickle(df_X_y_path)
-file_name = f"classification_reports_MLP_pytorch.txt"
+df = pd.read_csv(df_path)
+X = df.drop(columns=["subjid","gendna","test","Unnamed: 0", "Unnamed: 0.1"]).values
+y = df["gendna"].values
 
-# # Redirect the standard output to the file
-sys.stdout = open(os.path.join(saved_result, file_name), "w")
+test = df["test"].values
 
-# Load the dataset and perform preprocessing as previously defined
-df = pd.read_pickle(df_X_y_path)
-print(f"Shape of the data: {df.shape}")
+X_test_tot, y_test = X[test == 1], y[test == 1]
+X_train_tot, y_train = X[test == 0], np.array(y)[test == 0]
 
-# Define features and target variable
-y = df["gendna_type"]
-X = df.drop(columns=["gendna_type", "gendna", "subjid"])
+scaler = MinMaxScaler(feature_range=(-1,1)) 
 
-# Load configuration for test subjects
-config_dict = pd.read_pickle(config_path)
-test_subjects = config_dict["test_subjects"]
+def normalize(scaler, X_t, X_te):
+    X_train_new = scaler.fit_transform(X_t)
+    X_test_new = scaler.transform(X_te)
+    return X_train_new, X_test_new
 
-# Split data into training and test sets
-is_test_subject = df["subjid"].isin(test_subjects)
-X_train, y_train = X[~is_test_subject], y[~is_test_subject]
-X_test, y_test = X[is_test_subject], y[is_test_subject]
+def oversampling(state, X, y):
+    oversampler = SMOTE(random_state=state)
+    X_new, y_new = oversampler.fit_resample(X, y)
+    print("Resampled (Oversampled) class distribution:", Counter(y_new))
+    return X_new, y_new
 
-# Apply oversampling to address class imbalance
-oversampler = SMOTE(random_state=42)
-X_train, y_train = oversampler.fit_resample(X_train, y_train)
+def undersampling(state, X, y):
+    undersampler = RandomUnderSampler(random_state=state)
+    X_new, y_new = undersampler.fit_resample(X, y)
+    print("Resampled (Undersampled) class distribution:", Counter(y_new))
+    return X_new, y_new
 
-input_dim = X_train.shape[1]
+def rankfeatures(X, Y, nFeatures, thr, kf):
+    Y = np.asarray(Y)
+    top_features_all = []
 
-train_inputs = torch.tensor(X_train.values, dtype=torch.float32).to(device)
-train_labels = torch.tensor(y_train.values, dtype=torch.float32).unsqueeze(1).to(device)
-test_inputs = torch.tensor(X_test.values, dtype=torch.float32).to(device)
-test_labels = torch.tensor(y_test.values, dtype=torch.float32).unsqueeze(1).to(device)
+    # Generate shuffled patient indices
+    patient_indices = np.arange(X.shape[0])
+    np.random.shuffle(patient_indices)
 
-batch_size = 64
-validation_split = 0.2
-num_train_samples = int((1 - validation_split) * len(train_inputs))
-num_val_samples = len(train_inputs) - num_train_samples
+    # Process K-fold splitting
+    for fold, (train_indices, val_indices) in enumerate(kf.split(patient_indices)):
+        #print(f"Processing Fold {fold + 1}")
+        X_train_cv = X[train_indices]
+        y_train_cv = Y[train_indices]
 
-train_dataset, val_dataset = random_split(
-    TensorDataset(train_inputs, train_labels),
-    [num_train_samples, num_val_samples],
-    generator=torch.Generator().manual_seed(42)
-)
+        top_feature_indices = mrmr.mrmr_regression(
+            X=pd.DataFrame(X),
+            y=pd.DataFrame(Y),
+            K=int(thr),
+        )
+        top_features_all.append(top_feature_indices)
 
-train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-val_loader = DataLoader(val_dataset, batch_size=batch_size)
+    # Process feature aggregation
+    top_features_all_ = np.asarray(top_features_all, dtype=np.float32)
+    #print('Found top_features_all_', top_features_all_)
 
-######################################## MLP ########################################
-# Define the hyperparameters to tune for MLP
-params = {
-    'activation function': ['relu', 'leaky_relu', 'tanh', 'sigmoid', 'silu', 'gelu'],
-    'hidden layer': [
-        int(56/4),
-        int(56/2),
-        56,
-        56*2,
-        56*4,
-        56*8
-        ],
-    'learning rate': [0.0001, 0.001, 0.01, 0.1]
-}
+    all_top_features = np.unique(top_features_all_)
+    feature_scores = np.empty([len(all_top_features), 2], dtype=int)
 
-for activation_func in params['activation function']:
-    for hidden_layer in params['hidden layer']:
-        model = MLP_model(input_dim=input_dim, hidden_layer=hidden_layer, activation_func=activation_func).cuda()
-        criterion = nn.BCELoss()
-        for learning_rate in params['learning rate']:
-            print(f"Evaluating: Activation: {activation_func}, Hidden Layers: {hidden_layer}, Learning Rate: {learning_rate}")
-            optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
-            scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=5, factor=0.5, min_lr=1e-6, verbose=True)
-            best_val_loss = float('inf')
-            early_stopping_counter = 0
-            early_stopping_patience = 10
-            for epoch in range(3000):
-                model.train()
-                train_loss = 0.0
-                for inputs, labels in train_loader:
-                    inputs, labels = inputs.to(device), labels.to(device)
-                    train_outputs = model(inputs)
-                    loss = criterion(train_outputs, labels)
-                    optimizer.zero_grad()
-                    loss.backward()
-                    optimizer.step()
-                    train_loss += loss.item() * inputs.size(0)
+    for ii, ff in enumerate(all_top_features):
+        idx_ff = np.asarray(np.where(np.isin(top_features_all_, ff)))
+        score = np.sum(nFeatures - idx_ff[1])
+        feature_scores[ii, :] = [ff, score]
 
-                train_loss /= len(train_loader.dataset)
-                model.eval()
-                val_loss = 0.0
-                with torch.no_grad():
-                    for inputs, labels in val_loader:
-                        inputs, labels = inputs.to(device), labels.to(device)
-                        val_outputs = model(inputs)
-                        loss = criterion(val_outputs, labels)
-                        val_loss += loss.item() * inputs.size(0)
-                val_loss /= len(val_loader.dataset)
+    sorted_scores = np.argsort(feature_scores[:, 1])[::-1]
+    top_features = feature_scores[sorted_scores[:int(thr)], 0]
+    
+    return top_features
 
-                scheduler.step(val_loss)
+class Model(nn.Module):
+    def __init__(self, input_dim, hidden_layers, activation_func, dropout):
+        super(Model, self).__init__()
+        layers = []
+        layers.append(nn.Linear(input_dim, input_dim))
+        layers.append(nn.BatchNorm1d(input_dim))
+        layers.append(nn.Dropout(dropout))
+        for i in range(len(hidden_layers)):
+            if i == 0:
+                layers.append(nn.Linear(input_dim, hidden_layers[i]))
+                layers.append(getattr(nn, activation_func)())
+                layers.append(nn.BatchNorm1d(hidden_layers[i]))
+                layers.append(nn.Dropout(dropout))
+            else:
+                layers.append(nn.Linear(hidden_layers[i-1], hidden_layers[i]))
+                layers.append(getattr(nn, activation_func)())
+                layers.append(nn.BatchNorm1d(hidden_layers[i]))
+                layers.append(nn.Dropout(dropout))
+        layers.append(nn.Linear(hidden_layers[-1], 1))
+        layers.append(nn.Sigmoid())
+        self.model = nn.Sequential(*layers)
 
-                if val_loss < best_val_loss:
-                    best_val_loss = val_loss
-                    early_stopping_counter = 0
-                else:
-                    early_stopping_counter += 1
-                    if early_stopping_counter > early_stopping_patience:
-                        print(f"Early stopping at epoch {epoch}")
-                        break
+    def forward(self, x):
+        return self.model(x)
 
-            # Evaluate the model on the test set
-            model.eval()
-            with torch.no_grad():
-                train_outputs = model(train_inputs)
-                test_outputs = model(test_inputs)
-                test_loss = criterion(test_outputs, test_labels)
-                evaluate_and_print_results(train_outputs, train_labels, test_outputs, test_labels, activation_func, hidden_layer, learning_rate)
+def train_model(X_train_bal, y_train_bal, X_val_split, y_val_split, X_test_selected, y_test, input_dim, hidden_layer, activation_func, learning_rate, drop, device, best_report, balance_tech, top_features, top_feature_names, model_params, saved_result_path_classification_models):
+    model = Model(input_dim, hidden_layer, activation_func, drop).to(device)
+    criterion = nn.BCELoss()
+    optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+    
+    train_dataset = TensorDataset(torch.tensor(X_train_bal, dtype=torch.float32), torch.tensor(y_train_bal, dtype=torch.float32))
+    train_loader = DataLoader(train_dataset, batch_size=32, shuffle=False, worker_init_fn=lambda _: np.random.seed(random_state))
+    
+    val_dataset = TensorDataset(torch.tensor(X_val_split, dtype=torch.float32), torch.tensor(y_val_split, dtype=torch.float32))
+    val_loader = DataLoader(val_dataset, batch_size=32, shuffle=False, worker_init_fn=lambda _: np.random.seed(random_state))
+    
+    for epoch in range(200):
+        model.train()
+        for X_batch, y_batch in train_loader:
+            X_batch, y_batch = X_batch.to(device), y_batch.to(device)
+            optimizer.zero_grad()
+            outputs = model(X_batch).squeeze()
+            loss = criterion(outputs, y_batch)
+            loss.backward()
+            optimizer.step()
 
-# Close the file and restore the standard output
-sys.stdout.close()
-sys.stdout = sys.__stdout__
+        model.eval()
+        val_loss = 0
+        with torch.no_grad():
+            for X_batch, y_batch in val_loader:
+                X_batch, y_batch = X_batch.to(device), y_batch.to(device)
+                outputs = model(X_batch).squeeze()
+                loss = criterion(outputs, y_batch)
+                val_loss += loss.item()
+        val_loss /= len(val_loader)
+    
+    model.eval()
+    with torch.no_grad():
+        y_test_pred = (model(torch.tensor(X_test_selected, dtype=torch.float32).to(device)).squeeze() > 0.5).int().cpu().numpy()
+        report = classification_report(y_test, y_test_pred, output_dict=True)
+        if report['weighted avg']['f1-score'] > best_report.value:
+            best_report.value = report['weighted avg']['f1-score']
+            torch.save(model.state_dict(), os.path.join(saved_result_path_classification_models, f"best_model_dataset_updated.pth"))
+            model_params.update({
+                'activation_function': [activation_func],
+                'hidden_layer': [hidden_layer],
+                'learning_rate': [learning_rate],
+                'dropout': [drop],
+                'balance_tech': [balance_tech],
+                'selected_features': [top_features],
+                'top_feature_names': [top_feature_names]
+            })
+            y_train_pred = (model(torch.tensor(X_train_bal, dtype=torch.float32).to(device)).squeeze() > 0.5).int().cpu().numpy()
+            report_train = classification_report(y_train_bal, y_train_pred, output_dict=True)
+            print(model_params)
+            par = dict(model_params)
+            df_params = pd.DataFrame(par)
+            df_params.to_csv(os.path.join(saved_result_path_classification_models, "best_model_params_updated.csv"))
+            print(f"f1-score on train: {report_train['weighted avg']['f1-score']}")
+            print(f'Best f1-score on test: {best_report.value}')
 
-######################################## DNN ########################################
+if __name__ == '__main__':
+    mp.set_start_method('spawn')
+    num_folds = 5
+    kf = KFold(n_splits=num_folds, shuffle=True, random_state=random_state)
+    features = df.drop(columns=["subjid", "gendna", "test"]).columns
+    best_report = mp.Value('d', 0.65) # best f1-score
+    balancing = ["oversampling","undersampling"]
+    params = {
+        'activation function': ['ReLU','LeakyReLU', 'Tanh', 'Sigmoid', 'SiLU', 'GELU'],
+        'hidden layer': [(int(56/8),),
+                        (int(56/4),),
+                        (int(56/2),),
+                        (56,),
+                        (int(56/2),int(56/4)),
+                        (int(56/2),int(56/4),int(56/8)),
+                        (int(56/4),int(56/8),int(56/16)),
+                        ],
+        'learning rate': [0.001, 0.01, 0.1],
+        'dropout': [0.2, 0.3]
+    }
+    manager = mp.Manager()
+    model_params = manager.dict()
+    input_dim = 0
+    model_params = {}
+    for thr in range(10, int(X_train_tot.shape[1] * 0.5), 5):
+        # Perform feature selection
+        top_features = rankfeatures(X_train_tot, y_train, num_folds, thr, kf)
+        top_feature_names = [features[int(i)] for i in top_features]
 
-file_name = f"classification_reports_DNN_pytorch.txt"
-sys.stdout = open(os.path.join(saved_result, file_name), "w")
-print(f"Shape of the data: {df.shape}")
+        X_train_selected = X_train_tot[:, top_features]
+        X_test_selected = X_test_tot[:, top_features]
 
-# Define the hyperparameters to tune for DNN
-params = {
-    'activation function': ['relu', 'leaky_relu' ,'tanh', 'sigmoid', 'silu', 'gelu'],
-    'hidden layer': [
-        (int(56/2),int(56/4),int(56/8)),
-        (int(56/2),int(56/4)),
-        (56*2,56,int(56/2),int(56/4)),
-        (56*2,56,int(56/2))
-        ],
-    'learning rate': [0.0001, 0.001, 0.01, 0.1],
-}
+        # Define parameters for DL
+        input_dim = X_train_selected.shape[1]
+        X_train_selected, X_test_selected = normalize(scaler, X_train_selected, X_test_selected)
 
-for activation_func in params['activation function']:
-    for hidden_layer in params['hidden layer']:
-        model = DNN_model(input_dim=input_dim, hidden_layer=hidden_layer, activation_func=activation_func).cuda()
-        criterion = nn.BCELoss()
-        for learning_rate in params['learning rate']:
-            print(f"Evaluating: Activation: {activation_func}, Hidden Layers: {hidden_layer}, Learning Rate: {learning_rate}")
-            optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
-            scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=5, factor=0.5, min_lr=1e-6, verbose=True)
-            best_val_loss = float('inf')
-            early_stopping_counter = 0
-            early_stopping_patience = 10
-            for epoch in range(3000):
-                model.train()
-                train_loss = 0.0
-                for inputs, labels in train_loader:
-                    inputs, labels = inputs.to(device), labels.to(device)
-                    train_outputs = model(inputs)
-                    loss = criterion(train_outputs, labels)
-                    optimizer.zero_grad()
-                    loss.backward()
-                    optimizer.step()
-                    train_loss += loss.item() * inputs.size(0)
+        for balance_tech in balancing: 
+            if balance_tech == 'oversampling':
+                X_train_bal, y_train_bal = oversampling(random_state, X_train_selected, y_train)
+            elif balance_tech == 'undersampling':
+                X_train_bal, y_train_bal = undersampling(random_state, X_train_selected, y_train)
+            
+            X_train_split, X_val_split, y_train_split, y_val_split = train_test_split(X_train_bal, y_train_bal, test_size=0.2, random_state=random_state)
 
-                train_loss /= len(train_loader.dataset)
-                model.eval()
-                val_loss = 0.0
-                with torch.no_grad():
-                    for inputs, labels in val_loader:
-                        inputs, labels = inputs.to(device), labels.to(device)
-                        val_outputs = model(inputs)
-                        loss = criterion(val_outputs, labels)
-                        val_loss += loss.item() * inputs.size(0)
-                val_loss /= len(val_loader.dataset)
+            X_train_bal, X_test_selected = normalize(scaler, X_train_bal, X_test_selected)
+            processes = []
+            for activation_func in params['activation function']:
+                for hidden_layer in params['hidden layer']:
+                    for learning_rate in params['learning rate']:
+                        for drop in params['dropout']:
+                            p = mp.Process(target=train_model, args=(X_train_bal, y_train_bal, X_val_split, y_val_split, X_test_selected, y_test, input_dim, hidden_layer, activation_func, learning_rate, drop, device, best_report, balance_tech, top_features, top_feature_names, model_params, saved_result_path_classification_models))
+                            p.start()
+                            processes.append(p)
+            for p in processes:
+                p.join()
 
-                scheduler.step(val_loss)
+    parameters = pd.read_csv(os.path.join(saved_result_path_classification_models, "best_model_params_updated.csv"))
+    hidden_layer = ast.literal_eval(parameters['hidden_layer'][0])
+    activation_func = parameters['activation_function'][0]
+    dropout = float(parameters['dropout'][0])
+    balance_tech = parameters['balance_tech'][0]
+    selected_features_str = parameters['selected_features'][0]
+    selected_features_str = re.sub(r"\s+", ", ", selected_features_str.strip())
+    top_features = ast.literal_eval(selected_features_str)
+    top_feature_names = ast.literal_eval(parameters['top_feature_names'][0])
+    print(len(top_feature_names))
+    model = Model(len(top_features), hidden_layer, activation_func, dropout).to(device)
+    model.load_state_dict(torch.load(os.path.join(saved_result_path_classification_models, "best_model_dataset_updated.pth")))
+    X_test = X_test_tot[:, top_features]
+    X_train = X_train_tot[:, top_features]
+    X_train, X_test = normalize(scaler, X_train, X_test)
+    if balance_tech == 'oversampling':
+        X_train, y_train = oversampling(random_state, X_train, y_train)
+    elif balance_tech == 'undersampling':
+        X_train, y_train = undersampling(random_state, X_train, y_train)
+    X_train, X_test = normalize(scaler, X_train, X_test)
+    y_test_pred = (model(torch.tensor(X_test, dtype=torch.float32).to(device)).squeeze() > 0.5).int().cpu().numpy()
+    y_train_pred = (model(torch.tensor(X_train, dtype=torch.float32).to(device)).squeeze() > 0.5).int().cpu().numpy()
 
-                if val_loss < best_val_loss:
-                    best_val_loss = val_loss
-                    early_stopping_counter = 0
-                else:
-                    early_stopping_counter += 1
-                    if early_stopping_counter > early_stopping_patience:
-                        print(f"Early stopping at epoch {epoch}")
-                        break
+    # Evaluate the performance of the DNN model with different hyperparameters
+    file_name = f"classification_report_dataset_updated.txt"
+    # # Redirect the standard output to the file
+    sys.stdout = open(os.path.join(saved_result, file_name), "w")
 
-            # Evaluate the model on the test set
-            model.eval()
-            with torch.no_grad():
-                train_outputs = model(train_inputs)
-                test_outputs = model(test_inputs)
-                test_loss = criterion(test_outputs, test_labels)
-                evaluate_and_print_results(train_outputs,train_labels, test_outputs, test_labels, activation_func, hidden_layer, learning_rate)
+    # print(f"Best f1-score: {best_report}")
+    print("\nParemeters of the best model:")
+    model_params = dict({
+        'activation_function': activation_func,
+        'hidden_layer': hidden_layer,
+        'balance_tech': balance_tech,
+        'dropout': dropout,
+        'selected_features': top_features,
+        'top_feature_names': top_feature_names
+    })
+    print(model_params)
 
-# Close the file and restore the standard output
-sys.stdout.close()
-sys.stdout = sys.__stdout__
+    print(f"Shape of the data: {df.shape}")
+    print("\nTraining Set Performance:")
+    print(classification_report(y_train, y_train_pred))
+    print(confusion_matrix(y_train, y_train_pred))
+    print("\nTesting Set Performance:")
+    print(classification_report(y_test, y_test_pred))
+    print(confusion_matrix(y_test, y_test_pred))
+
+    sys.stdout.close()
+    sys.stdout = sys.__stdout__

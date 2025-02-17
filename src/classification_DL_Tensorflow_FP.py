@@ -57,9 +57,9 @@ X_train_tot, y_train = X[test == 0], np.array(y)[test == 0]
 scaler = MinMaxScaler(feature_range=(-1,1)) 
 
 def normalize(scaler, X_t, X_te):
-    X_new = scaler.fit_transform(X_t)
-    X_new_test = scaler.transform(X_te)
-    return X_new, X_new_test
+    X_train_new = scaler.fit_transform(X_t)
+    X_test_new = scaler.transform(X_te)
+    return X_train_new, X_test_new
 
 
 def oversampling(state, X, y):
@@ -125,22 +125,20 @@ model_params = {}
 balancing = ["oversampling","undersampling"]
 params = {
     'activation function': ['relu','leaky_relu', 'tanh', 'sigmoid', 'silu', 'gelu'],
-    'hidden layer': [(int(56/4),),
+    'hidden layer': [(int(56/8),),
+                    (int(56/4),),
                     (int(56/2),),
                     (56,),
                     (56*2,),
-                    (56*4,),
-                    (56*8,),
-                    (int(56/2),int(56/4),int(56/8)),
                     (int(56/2),int(56/4)),
-                    (56*2,56,int(56/2)),
+                    (int(56/2),int(56/4),int(56/8)),
                     (int(56/4),int(56/8),int(56/16)),
                     ],
     'learning rate': [0.0001, 0.001, 0.01, 0.1],
     'dropout': [0.2, 0.3, 0.4, 0.5]
 }
 
-for thr in range(10, int(X_train_tot.shape[1] * 0.5), 5):
+for thr in range(10, int(X_train_tot.shape[1] * 0.7), 1):
     # Perform feature selection
     top_features = rankfeatures(X_train_tot, y_train, num_folds, thr, kf)
     top_feature_names = [features[int(i)] for i in top_features]
@@ -164,7 +162,7 @@ for thr in range(10, int(X_train_tot.shape[1] * 0.5), 5):
                 for learning_rate in params['learning rate']:
                     for drop in params['dropout']:
                         model = Sequential()
-                        model.add(Dense(units=56, input_shape=(input_dim, )))
+                        model.add(Dense(units=input_dim, input_shape=(input_dim, )))
                         model.add(BatchNormalization())
                         model.add(Dropout(drop))
                         for layer in hidden_layer:
@@ -211,18 +209,29 @@ for thr in range(10, int(X_train_tot.shape[1] * 0.5), 5):
 
 model = tf.keras.models.load_model(os.path.join(saved_result_path_classification_models, "best_model.keras"))
 X_test = X_test_tot[:, model_params['selected_features']]
+X_train = X_train_tot[:, model_params['selected_features']]
+X_train, X_test = normalize(scaler, X_train, X_test)
+if model_params['balance_tech'] == 'oversampling':
+    X_train, y_train = oversampling(random_state, X_train, y_train)
+elif model_params['balance_tech'] == 'undersampling':
+    X_train, y_train = undersampling(random_state, X_train, y_train)
+X_train, X_test = normalize(scaler, X_train, X_test)
 y_test_pred = (model.predict(X_test) > 0.5).astype("int32")
+y_train_pred = (model.predict(X_train) > 0.5).astype("int32")
 
 # Evaluate the performance of the DNN model with different hyperparameters
 file_name = f"classification_report.txt"
 # # Redirect the standard output to the file
 sys.stdout = open(os.path.join(saved_result, file_name), "w")
 
-print(f"Best f1-score: {best_report}")
+# print(f"Best f1-score: {best_report}")
 print("\nParemeters of the best model:")
 print(model_params)
 
 print(f"Shape of the data: {df.shape}")
+print("\nTraining Set Performance:")
+print(classification_report(y_train, y_train_pred))
+print(confusion_matrix(y_train, y_train_pred))
 print("\nTesting Set Performance:")
 print(classification_report(y_test, y_test_pred))
 print(confusion_matrix(y_test, y_test_pred))
