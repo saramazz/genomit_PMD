@@ -952,6 +952,7 @@ def feature_selection(df):
     # print("Columns to drop:", columns_to_drop)
 
     X, y = define_X_y(df, columns_to_drop)
+
     return X, y
 
 
@@ -993,7 +994,8 @@ def define_X_y(df, columns_to_drop):
     # print(y.value_counts())
 
     # Get the list of columns to drop based on 'N' in the specified column
-    df.drop(columns=columns_to_drop, inplace=True)
+    # df.drop(columns=columns_to_drop, inplace=True) #present in my script
+    # drop df = df.drop(columns=["gendna_type"])
 
     # Convert X_df to numpy array
     X = df.values
@@ -1023,9 +1025,9 @@ def fill_missing_values(df):
 
 def load_and_prepare_data(GLOBAL_DF_PATH):
     """Load and prepare the DataFrame for classification."""
-    #GLOBAL_DF_PATH = os.path.join(saved_result_path, "df", "df_Global_preprocessed.csv")
+    # GLOBAL_DF_PATH = os.path.join(saved_result_path, "df", "df_Global_preprocessed.csv")
 
-    #print the path
+    # print the path
     print("Global DataFrame path:", GLOBAL_DF_PATH)
 
     if not os.path.exists(GLOBAL_DF_PATH):
@@ -1040,10 +1042,12 @@ def load_and_prepare_data(GLOBAL_DF_PATH):
     # print("Columns:", df.columns)
 
     # Remove rows where gendna is -998
-    df = df[df["gendna"] != -998]
+    # df = df[df["gendna"] != -998] # present in my df
 
     # Preprocess target column, handle NaNs, and print DataFrame
-    df = process_gendna_column(df)
+    # df = process_gendna_column(df)# present in my df
+    # Plot distribution of 'gendna_type'
+    plot_gendna_distribution(df)
     # df = fill_missing_values(df)
 
     mt_DNA_patients = df[df["gendna_type"] == 0]
@@ -1208,7 +1212,6 @@ def process_feature_selection(
             print("Selected Features:")
             print(selected_features)
             print("Number of Selected Features:", len(selected_features))
-            
 
         except Exception as e:
             print(f"Error during feature selection: {e}")
@@ -1253,19 +1256,19 @@ def process_feature_selection(
     elif feature_selection == "mrmr_selected":
         selected_features = [
             "ear_voice_abn",
-            "lac",
+            "genit_breast_abn",
+            "symp_on_2",
             "eye_abn",
             "card_abn",
-            "symp_on_5",
             "internal_abn",
-            "va",
+            "alcohol",
             "ecgh",
-            "genit_breast_abn",
-            "sex",
-            "ecg",
-            "symp_on_3",
+            "resp",
             "hba1c",
-            "bmi",
+            "sex",
+            "ear",
+            "lac",
+            "echo",
         ]
         X_df = X_df[selected_features]
         X_df.reset_index(drop=True, inplace=True)
@@ -1287,7 +1290,45 @@ def process_feature_selection(
 
         param_grid_selected = param_grid
         pipeline_selected = pipeline
+    elif (
+        feature_selection == "mrmr_selected_all"
+    ):  # mrmr with 25% selected features on the dataset with all patients, even without symp
+        selected_features = [
+            "ear_voice_abn",
+            "genit_breast_abn",
+            "lac",
+            "card_abn",
+            "resp",
+            "internal_abn",
+            "ecgh",
+            "bmi",
+            "ear",
+            "sex",
+            "hba1c",
+            "eye_abn",
+            "ecg",
+            "hmri",
+        ]
+        X_df = X_df[selected_features]
+        X_df.reset_index(drop=True, inplace=True)
 
+        # Check if X_train is a numpy array and convert it to DataFrame if necessary
+        if isinstance(X_train, np.ndarray):
+            X_train = pd.DataFrame(X_train)
+            X_train.reset_index(drop=True, inplace=True)
+
+        # Select rows based on the index and convert it back to numpy array
+        X_train_selected = X_df.loc[X_train.index].values
+
+        # Do the same for X_test
+        if isinstance(X_test, np.ndarray):
+            X_test = pd.DataFrame(X_test)
+            X_test.reset_index(drop=True, inplace=True)
+
+        X_test_selected = X_df.loc[X_test.index].values
+
+        param_grid_selected = param_grid
+        pipeline_selected = pipeline
     else:
         # No feature selection applied
 

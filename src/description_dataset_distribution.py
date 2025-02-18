@@ -23,9 +23,21 @@ BEST_PATH = os.path.join(saved_result_path_classification, "best_model")
 
 df_classification_path= os.path.join(BEST_PATH, "df_classification.csv") 
 
+#ask if consider patients with no sympthoms
+Input=input("Do you want to consider patients with no symptoms? (y/n)")
+if Input=="y":
+    GLOBAL_DF_PATH = os.path.join(saved_result_path, "df", "df_Global_preprocessed_all.csv")
+
+    BEST_PATH = os.path.join(saved_result_path_classification, "best_model_all")
+    df_classification_path= os.path.join(BEST_PATH, "df_classification.csv") 
+    
+
+
+
 # Create the directory if it does not exist
 if not os.path.exists(SAVING_PATH):
-    os.makedirs(SAVING_PATH)\
+    os.makedirs(SAVING_PATH)
+
 
 def read_features_from_file(file_path):
     # Initialize an empty list to store the features
@@ -231,7 +243,7 @@ for type_db in type_data:
 
         plt.tight_layout()
         plt.savefig(
-            os.path.join(SAVING_PATH, f"clindiag_hist_{type_db}.png"),
+            os.path.join(SAVING_PATH, f"clindiag_hist_{type_db}_{Input}.png"),
             format="png",
             bbox_inches="tight",
         )

@@ -62,36 +62,22 @@ from utilities import *
 from processing import *
 from plotting import *
 
-# Constants and Paths
-GLOBAL_DF_PATH = os.path.join(saved_result_path, "df", "df_Global_preprocessed.csv")
-BEST_PATH = os.path.join(saved_result_path_classification, "best_model")
+
+# GLOBAL_DF_PATH = os.path.join(saved_result_path, "df", "df_Global_preprocessed_all.csv")
+GLOBAL_DF_PATH = os.path.join(saved_result_path, "df", "df_symp.csv")
 EXPERIMENT_PATH = os.path.join(
-    saved_result_path_classification, "experiments_all_models"
+    saved_result_path_classification, "experiments_all_models_all"
 )
-# VERSION = "20250210_164401"  # best model version
-VERSION = "20250212_144836"
+BEST_PATH = os.path.join(saved_result_path_classification, "best_model_all")
+VERSION = "20250218_154604"  # "20250217_122843"
 
-#ask if consider patients with no sympthoms
-Input=input("Do you want to consider patients with no symptoms? (y/n)")
-if Input=="y":
-    GLOBAL_DF_PATH = os.path.join(saved_result_path, "df", "df_Global_preprocessed_all.csv")
-    EXPERIMENT_PATH = os.path.join(
-        saved_result_path_classification, "experiments_all_models_all"
-    )
-    BEST_PATH = os.path.join(saved_result_path_classification, "best_model_all")
-    VERSION = "20250217_122843"
-
-#Print best path and experiment path
+# Print best path and experiment path
 print("Best path: ", BEST_PATH)
 print("Experiment path: ", EXPERIMENT_PATH)
 
-    
 
 # Ensure necessary directories exist
 os.makedirs(EXPERIMENT_PATH, exist_ok=True)
-
-
-
 
 
 # Ensure necessary directories exist
@@ -275,6 +261,7 @@ def main():
         nFeatures,
         num_folds,
     ) = experiment_definition(X, y, df, EXPERIMENT_PATH, mt_DNA_patients)
+    df = df.drop(columns=["gendna_type", "test", "Unnamed: 0"])
 
     # Save the df to a pickle file and to a csv file
     df.to_pickle(os.path.join(BEST_PATH, "df_classification.pkl"))
@@ -296,7 +283,7 @@ def main():
     )
 
     print("Starting the classification...")
-    '''
+    """
 
 
     #if using the best model file
@@ -312,31 +299,28 @@ def main():
         print(f"Best Estimator: {best_estimator}")
         print(f"Best Score: {best_score}")
         print("Best Parameters:", best_params)
-    '''
+    """
 
-
-    
-
-    classifiers={
-                "XGBClassifier":(XGBClassifier(),
+    classifiers = {
+        "RandomForestClassifier": (
+            RandomForestClassifier(),
             {
-                "max_depth": [6],  # Most impactful depths
-                "n_estimators": [50],  # Reduced number of trees
-                "learning_rate": [0.1],  # Wide range learning rates
-                "subsample": [1.0],  # Essential variations
-                "colsample_bytree": [0.8],  # Stable choice
-                "reg_alpha": [0],  # Skip regularization for complexity
-                "reg_lambda": [1],  # Default value
-            })}
-    
+                "n_estimators": [150],  # Balanced between speed and accuracy
+                "max_depth": [None, 10],  # Allow some depth flexibility
+                "min_samples_split": [5],  # Regular split thresholds
+                "min_samples_leaf": [1, 2],  # Slight variant in leaves
+                "max_features": ["sqrt"],  # Use of out-of-the-box
+                "bootstrap": [True],  # Regular setting
+                "criterion": ["gini"],  # Standard impurity measure
+            },
+        ),
+    }
 
-
-  # Initialize GridSearchCV with the pipeline or model
+    # Initialize GridSearchCV with the pipeline or model
     for classifier, (clf_model, param_grid) in classifiers.items():
         """adding the selector"""
 
-        
-        selector = RFE(estimator=clf_model)
+        selector = SelectFromModel(estimator=clf_model)
         X_train = selector.fit_transform(X_train, y_train)
         X_test = selector.transform(X_test)
 
@@ -344,7 +328,6 @@ def main():
         print("Dimension of X_train and X_test")
         print(X_train.shape)
         print(X_test.shape)
-
 
         # Rimuove la colonna 'subjid' se esiste in X_df
         if "subjid" in df.columns:
@@ -355,7 +338,7 @@ def main():
         print(selected_features)
         print("Number of Selected Features:", len(selected_features))
 
-        '''
+        """
         # features selected
         selected_features = ['aao', 'alcohol', 'bgc', 'bmi', 'card_abn', 'ear_voice_abn', 'echo',
         'eeg', 'eye_abn', 'fhx', 'gait_abn', 'hba1c', 'hisc', 'internal_abn',
@@ -363,14 +346,13 @@ def main():
         'resp', 'smoking', 'symp_on_1', 'symp_on_3', 'symp_on_4', 'va', 'wml']
         print("Features used in the classification:")
         print(selected_features)
-        '''
+        """
         # save the selected features to a text file
         with open(os.path.join(BEST_PATH, "selected_features.txt"), "w") as f:
             for item in selected_features:
                 f.write("%s\n" % item)
 
-
-        '''
+        """
         # Assuming column names available, construct DataFrame
         X_test = pd.DataFrame(
             X_test, columns=features
@@ -381,27 +363,20 @@ def main():
 
         X_train = pd.DataFrame(X_train, columns=features)
         X_train = X_train[selected_features]
-        '''
-
+        """
 
         oversampler = SMOTE(random_state=42)
-        X_train, y_train = oversampler.fit_resample(
-            X_train, y_train
-        )
+        X_train, y_train = oversampler.fit_resample(X_train, y_train)
         X_test, y_test = (
             X_test,
             y_test,
         )  # No resampling for test data
 
-        
-
-
-        #print dimension of X_train and X_test
+        # print dimension of X_train and X_test
         print("Dimension of X_train and X_test")
         print(X_train.shape)
         print(X_test.shape)
 
-  
         grid_search = GridSearchCV(
             estimator=clf_model,
             param_grid=param_grid,
@@ -424,13 +399,11 @@ def main():
 
         print("Training performances:")
         print("Best score:", best_score_)
-        print("Best params:", best_params)      
-
+        print("Best params:", best_params)
 
         perform_classification_best(
             X_test, y_test, best_estimator, BEST_PATH, selected_features
         )
-
 
     print("Classification with the best classifier completed and results saved.")
 

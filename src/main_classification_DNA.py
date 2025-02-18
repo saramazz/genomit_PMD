@@ -63,19 +63,20 @@ from processing import *
 from plotting import *
 
 # Constants and Paths
-GLOBAL_DF_PATH = os.path.join(saved_result_path, "df", "df_Global_preprocessed.csv")
+GLOBAL_DF_PATH = os.path.join(saved_result_path, "df", "df_no_symp.csv")
+# GLOBAL_DF_PATH = os.path.join(saved_result_path, "df", "df_Global_preprocessed.csv")
 EXPERIMENT_PATH = os.path.join(
     saved_result_path_classification, "experiments_all_models"
 )
 
-#ask if consider patients with no sympthoms
-Input=input("Do you want to consider patients with no symptoms? (y/n)")
-if Input=="y":
-    GLOBAL_DF_PATH = os.path.join(saved_result_path, "df", "df_Global_preprocessed_all.csv")
+# ask if consider patients with no sympthoms
+Input = input("Do you want to consider patients with no symptoms? (y/n)")
+if Input == "y":
+    GLOBAL_DF_PATH = os.path.join(saved_result_path, "df", "df_symp.csv")
     EXPERIMENT_PATH = os.path.join(
         saved_result_path_classification, "experiments_all_models_all"
     )
-    
+
 
 # Ensure necessary directories exist
 os.makedirs(EXPERIMENT_PATH, exist_ok=True)
@@ -85,7 +86,7 @@ def setup_output(current_datetime):
     """Set up output redirection to a log file."""
 
     # file_name = f"classification_reports_{current_datetime}_mrmr.txt"
-    file_name = f"classification_reports_no_mrmr.txt"  # {current_datetime}_mrmr.txt"
+    file_name = f"classification_reports_ALL.txt"  # {current_datetime}_mrmr.txt"
     sys.stdout = open(os.path.join(EXPERIMENT_PATH, file_name), "w")
 
 
@@ -256,7 +257,12 @@ def main():
     setup_output(current_datetime)
     # Load and preprocess data
     df, mt_DNA_patients = load_and_prepare_data(GLOBAL_DF_PATH)
+    # remove gendna_type from the features
+
     X, y = feature_selection(df)
+    df = df.drop(columns=["gendna_type", "test", "Unnamed: 0"])
+    # print the columns
+    print("Columns:", df.columns)
     (
         X_train,
         X_test,
@@ -332,7 +338,7 @@ def main():
         ),
     }
 
-    classifiers= {
+    classifiers = {
         "XGBClassifier": (
             XGBClassifier(),
             {
@@ -402,14 +408,16 @@ def main():
         "over",
         "under",
     ]
+
     feature_selection_options = [
         "no",
         "pca",
         "select_from_model",
         "rfe",
-        #"mrmr_selected",
+        "mrmr_selected",
     ]  # ,MRMR
-    # feature_selection_options = [mrmr]  # ,MRMR mrmr_selected means to give in input the list of feature calculated from mrmr in previous steps
+
+    #feature_selection_options = [        "mrmr"    ]  # ,MRMR mrmr_selected means to give in input the list of feature calculated from mrmr in previous steps
 
     # List to hold results of classifiers
     best_classifiers = []

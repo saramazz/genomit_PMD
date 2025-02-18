@@ -58,22 +58,24 @@ from processing import *
 from plotting import *
 
 # Constants and Paths
-GLOBAL_DF_PATH = os.path.join(saved_result_path, "df", "df_Global_preprocessed.csv")
+#GLOBAL_DF_PATH = os.path.join(saved_result_path, "df", "df_Global_preprocessed.csv")
+GLOBAL_DF_PATH = os.path.join(saved_result_path, "df", "df_no_symp.csv")
 BEST_PATH = os.path.join(saved_result_path_classification, "best_model")
 EXPERIMENT_PATH = os.path.join(
     saved_result_path_classification, "experiments_all_models"
 )
-VERSION = "20250212_144836"  # best model version
+VERSION = "20250218_154057"  # best model version
 
 #ask if consider patients with no sympthoms
 Input=input("Do you want to consider patients with no symptoms? (y/n)")
 if Input=="y":
-    GLOBAL_DF_PATH = os.path.join(saved_result_path, "df", "df_Global_preprocessed_all.csv")
+    #GLOBAL_DF_PATH = os.path.join(saved_result_path, "df", "df_Global_preprocessed_all.csv")
+    GLOBAL_DF_PATH = os.path.join(saved_result_path, "df", "df_symp.csv")
     EXPERIMENT_PATH = os.path.join(
         saved_result_path_classification, "experiments_all_models_all"
     )
     BEST_PATH = os.path.join(saved_result_path_classification, "best_model_all")
-    VERSION = "20250217_122843"
+    VERSION = "20250218_154604"
 
 
 def setup_output(current_datetime):
@@ -128,6 +130,7 @@ def main():
     df_raw = pd.read_csv(GLOBAL_DF_PATH)
     df_raw_test = df_raw[df_raw["subjid"].isin(test_subjects)]
 
+
     print("Results:")
     print(results)
 
@@ -154,6 +157,7 @@ def main():
 
     # print("False Negative (FN) Subject IDs:")
     # print(fn_subjids.values)
+    '''
 
     # add gendna column from df_not_numerical to the df_raw_test basing on subjid
     df_raw_test["gendna_non_num"] = df_raw_test["subjid"].map(
@@ -182,6 +186,7 @@ def main():
     print("df_raw_test shape:", df_raw_test.shape)
     print("df_raw_test columns:", df_raw_test.columns)
     print("df_raw_test head():", df_raw_test.head())
+    '''
 
     # input("Press Enter to continue...")
 
@@ -284,6 +289,13 @@ def main():
         "C12": "Wolfram-Syndrome (DIDMOAD-Syndrome)",
         "D05": "Other mitochondrial mono-organ disorder",
     }
+
+    #add the clindiag__decod column to the df_test from the os.path.join(saved_result_path, "df", "df_symp.csv")
+    my_df_path=os.path.join(saved_result_path, "df", "df_Global_preprocessed.csv")
+    my_df = pd.read_csv(my_df_path)
+    #add the clindiag__decod only for the common subjid
+    df_test = pd.merge(df_test, my_df[["subjid","clindiag__decod"]], on="subjid", how="left")
+
 
     df_test["clindiag__decod"] = df_test["clindiag__decod"].map(clindiag_mapping)
 

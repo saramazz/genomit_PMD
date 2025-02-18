@@ -140,11 +140,12 @@ def plot_gendna_distribution(df):
     plt.rcParams["font.size"] = 20
 
     # Validate necessary column existence
-    if "gendna_type_num" not in df.columns:
+    if "gendna_type" not in df.columns:
         raise ValueError("DataFrame must contain 'gendna_type_num' column")
 
     # Calculate class counts directly from 'gendna_type_num'
-    class_counts = df["gendna_type_num"].value_counts()
+    # class_counts = df["gendna_type_num"].value_counts()
+    class_counts = df["gendna_type"].value_counts()
 
     # Set up the labels for the classes
     class_labels = {0: "mtDNA", 1: "nDNA"}
