@@ -128,7 +128,7 @@ def plot_histogram_visits_per_patient(df, hospital_name, saved_result_path):
     plt.close()
 
 
-def plot_gendna_distribution(df):
+def plot_gendna_distribution(df, EXPERIMENT_PATH):
     """
     Plot the distribution of 'gendna_type_num' classes in a pie chart.
 
@@ -172,7 +172,7 @@ def plot_gendna_distribution(df):
 
     # Save the plot to the designated path
     my_file = "gendna_distribution_pie_n_mt.png"
-    plot_path = os.path.join(saved_result_path_classification, my_file)
+    plot_path = os.path.join(EXPERIMENT_PATH, my_file)
     plt.savefig(plot_path, bbox_inches="tight")
     print(f"gendna distribution plot saved at {plot_path}")
     plt.close()

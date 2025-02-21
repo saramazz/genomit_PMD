@@ -62,21 +62,21 @@ from utilities import *
 from processing import *
 from plotting import *
 
-# Constants and Paths
-GLOBAL_DF_PATH = os.path.join(saved_result_path, "df", "df_no_symp.csv")  # Reduced
-# GLOBAL_DF_PATH = os.path.join(saved_result_path, "df", "df_Global_preprocessed.csv")
-EXPERIMENT_PATH = os.path.join(
-    saved_result_path_classification, "experiments_all_models_2102"
-)
 
 # ask if consider patients with no sympthoms
-Input = input(
-    "Do you want to consider df_symp patients with no symptoms? (y/n)"
-)  # Complete
+Input = input("Do you want to consider the reduced df? (y/n)")  # Complete
+
 if Input == "y":
+    # Constants and Paths
+    GLOBAL_DF_PATH = os.path.join(saved_result_path, "df", "df_no_symp.csv")  # Reduced
+    # GLOBAL_DF_PATH = os.path.join(saved_result_path, "df", "df_Global_preprocessed.csv")
+    EXPERIMENT_PATH = os.path.join(
+        saved_result_path_classification, "experiments_all_models_red"
+    )
+else:
     GLOBAL_DF_PATH = os.path.join(saved_result_path, "df", "df_symp.csv")
     EXPERIMENT_PATH = os.path.join(
-        saved_result_path_classification, "experiments_all_models_all_2102"
+        saved_result_path_classification, "experiments_all_models_compl"
     )
 
 
@@ -88,7 +88,15 @@ def setup_output(current_datetime):
     """Set up output redirection to a log file."""
 
     # file_name = f"classification_reports_{current_datetime}_mrmr.txt"
-    file_name = f"classification_reports_ALL.txt"  # {current_datetime}_mrmr.txt"
+    # ask if rename the output file
+    ans = input("Do you want to rename the output file? (y/n)")
+    if ans == "y":
+        file_name = input(
+            "Insert the name of the output file that follow classification_reports_: "
+        )
+        file_name = f"classification_reports_{file_name}.txt"
+    else:
+        file_name = f"classification_reports_ALL.txt"  # {current_datetime}_mrmr.txt"
     sys.stdout = open(os.path.join(EXPERIMENT_PATH, file_name), "w")
 
 
@@ -258,11 +266,12 @@ def main():
     current_datetime = datetime.now().strftime("%Y%m%d_%H%M%S")
     setup_output(current_datetime)
     # Load and preprocess data
-    df, mt_DNA_patients = load_and_prepare_data(GLOBAL_DF_PATH)
+    df, mt_DNA_patients = load_and_prepare_data(GLOBAL_DF_PATH, EXPERIMENT_PATH)
     # remove gendna_type from the features
 
-    X, y = feature_selection(df)
-    df = df.drop(columns=["gendna_type", "test", "Unnamed: 0"])
+    X, y = define_X_y(df)
+    df = df.drop(columns=["gendna_type", "Unnamed: 0"])
+
     # print the columns
     print("Columns:", df.columns)
     (
@@ -294,7 +303,7 @@ def main():
 
     print("Starting the classification...")
 
-    classifiers_l = {  # light
+    classifiers = {  # light
         "XGBClassifier": (
             XGBClassifier(),
             {
@@ -307,40 +316,9 @@ def main():
                 "reg_lambda": [1],  # Default value
             },
         ),
-        "DecisionTreeClassifier": (
-            DecisionTreeClassifier(),
-            {
-                "criterion": ["gini"],
-                "max_depth": [None, 10],
-                "min_samples_split": [2],
-                "min_samples_leaf": [1],
-                "max_features": [None],
-                "splitter": ["best"],
-            },
-        ),
-        "RandomForestClassifier": (
-            RandomForestClassifier(),
-            {
-                "n_estimators": [100],  # Start with fewer trees
-                "max_depth": [None],  # Unconstrained depth
-                "min_samples_split": [2],  # Default split
-                "min_samples_leaf": [1],  # Default leaf size
-                "max_features": ["sqrt"],  # Commonly effective choice
-                "bootstrap": [True],  # Standard setting
-                "criterion": ["gini"],  # Focus on gini criterion
-            },
-        ),
-        "SVM": (
-            SVC(),
-            {
-                "C": [1],  # Default range center
-                "gamma": [0.1],  # Standard gamma
-                "kernel": ["rbf"],  # Default and effective kernel
-            },
-        ),
     }
 
-    classifiers = {
+    classifiers_final = {
         "XGBClassifier": (
             XGBClassifier(),
             {
@@ -380,24 +358,6 @@ def main():
         ),
     }
 
-    """
-    #Best score: 0.7690024095808604
-    classifiers = {
-        "RandomForestClassifier": (
-            RandomForestClassifier(),
-            {
-                "n_estimators": [100, 300],  # Key sizes of forests
-                "max_depth": [None, 20],  # Either unconstrained or some constraint
-                "min_samples_split": [2, 10],  # Common divisors
-                "min_samples_leaf": [1, 3],  # Two simple leaves
-                "max_features": [None, "sqrt"],  # Reduce features considered per split
-                "bootstrap": [True],  # Most typical setting
-                "criterion": ["gini"],  # Focus on gini
-            },
-        ),
-    }
-    """
-
     # define the settings of the experiment
     balancing_techniques = [
         "no",
@@ -407,14 +367,8 @@ def main():
 
     feature_selection_options = [
         "no",
-        "pca",
-        "select_from_model",
-        "rfe",
-        "mrmr_selected",
-    ]  # ,MRMR
-
-    # feature_selection_options = [        "mrmr"    ]  # ,MRMR mrmr_selected means to give in input the list of feature calculated from mrmr in previous steps
-
+        "mrmr_ff",  # mrmr with forward feature selection
+    ]
     # List to hold results of classifiers
     best_classifiers = []
 
@@ -422,15 +376,6 @@ def main():
     for classifier, (clf_model, param_grid) in classifiers.items():
         print("^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n")
         pipeline = Pipeline([("clf", clf_model)])  # Create pipeline to clf
-
-        # Create an imputer object with 'constant' strategy and your specified fill value
-        imputer = SimpleImputer(strategy="constant", fill_value=998)
-
-        # Fit the imputer on the training data and transform it
-        X_train = imputer.fit_transform(X_train)
-
-        # Transform the test data with the same imputer
-        X_test = imputer.transform(X_test)
 
         """# Decrease
         samples = 30

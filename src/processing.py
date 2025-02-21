@@ -16,7 +16,8 @@ import shap  # for SHAP values
 
 # Imbalanced-learn library imports
 from imblearn.over_sampling import SMOTE
-#import ADASYN
+
+# import ADASYN
 from imblearn.over_sampling import ADASYN
 
 from imblearn.under_sampling import RandomUnderSampler
@@ -352,42 +353,16 @@ def experiment_definition(X, y, X_df, saving_path, mt_DNA_patients, num_folds=5)
     if not os.path.exists(classifier_config_path):
         print("Classifier configuration does not exist. Creating the configuration...")
 
-        test_subjects_path = os.path.join(
-            saved_result_path_classification, "saved_data", "test_subjects_179.pkl"
-        )  # "test_subjects_num.pkl") "test_subjects_final.pkl"#
+        #consider the column test of the df and filter the test subjects
+        test_subjects_ids = X_df[X_df["test"] == 1]["subjid"].values
 
-        if not os.path.exists(test_subjects_path):
-            raise FileNotFoundError(
-                "Saved test subjects file is missing. Test subjects must be defined first."
-            )
-
-        with open(test_subjects_path, "rb") as f:
-            test_subjects_ids = pickle.load(f)
-
-        # remove hospital name from the test_subjects_ids using .apply(lambda x: x.split("_")[0])
-        test_subjects_ids = [x.split("_")[0] for x in test_subjects_ids]
-
-        # Print the number of test subjects
-        print(f"Number of test subjects: {len(test_subjects_ids)}")
-
-        # Filter test indices and ensure test_subjects_ids aligns with the dataframe
-        existing_test_indices = X_df[X_df["subjid"].isin(test_subjects_ids)].index
-        test_subjects_ids = X_df.loc[existing_test_indices, "subjid"].tolist()
-
-        # print the length of test_subjects_ids
+        #remove the test column
+        X_df = X_df.drop(columns=["test"])
+        
+        # print the length of test_subjects_ids 
         print("Length of test_subjects_ids: ", len(test_subjects_ids))
-
-        # print that the new test_subjects_ids are saved
-        print("New test_subjects_ids are saved in the test_subjects_final.pkl file")
-        test_subjects_path = os.path.join(
-            saved_result_path_classification,
-            "saved_data",
-            "test_subjects_final.pkl",
-        )
-        with open(test_subjects_path, "wb") as f:
-            pickle.dump(test_subjects_ids, f)
-        print(f"Updated test subjects saved to: {test_subjects_path}")
-
+        
+        input("Press Enter to continue...")
         # Set up KFold
         kf_path = os.path.join(saved_result_path_classification, "kf.pkl")
         if os.path.exists(kf_path):
@@ -878,7 +853,7 @@ def balance_data(X_train, y_train, X_test, y_test, balancing_technique):
         )  # No resampling for test data
     elif balancing_technique == "ada":
         # Apply oversampling to training data
-        oversampler = ADASYN(random_state=42) #TO DO update
+        oversampler = ADASYN(random_state=42)  # TO DO update
         X_train_resampled, y_train_resampled = oversampler.fit_resample(
             X_train_imputed, y_train
         )
@@ -940,7 +915,7 @@ def balance_data(X_train, y_train, X_test, y_test, balancing_technique):
     return X_train_resampled, y_train_resampled, X_test_resampled, y_test_resampled
 
 
-def feature_selection(df):
+def define_X_y(df):
     """Select and drop unnecessary features from the DataFrame."""
     df_vars = pd.read_excel(important_vars_path)
     column_name = "consider for mtDNA vs nDNA classification?"
@@ -965,7 +940,9 @@ def feature_selection(df):
     columns_to_drop += additional_columns
     # print("Columns to drop:", columns_to_drop)
 
-    X, y = define_X_y(df, columns_to_drop)
+    y = df["gendna_type"]
+    df = df.drop(columns=["gendna_type", "test", "Unnamed: 0"])
+    X = df.values
 
     return X, y
 
@@ -988,35 +965,6 @@ def print_data_info(X_train, X_test, y_train, y_test, features, df, working_path
     print("Distribution of y_test:", Counter(y_test))
 
 
-def define_X_y(df, columns_to_drop):
-    """
-    Define X and y from the given DataFrame, dropping specified columns.
-
-    Parameters:
-        df (DataFrame): The DataFrame containing the data.
-        global_path (str): The path to the global directory.
-        columns_to_drop (list): List of column names to drop from the DataFrame.
-
-    Returns:
-        tuple: A tuple containing X (features) and y (target).
-    """
-    # Extract the target variable
-    y = df["gendna_type"]
-
-    # print the distribution of the target variable
-    # print("Distribution of the target variable:")
-    # print(y.value_counts())
-
-    # Get the list of columns to drop based on 'N' in the specified column
-    # df.drop(columns=columns_to_drop, inplace=True) #present in my script
-    # drop df = df.drop(columns=["gendna_type"])
-
-    # Convert X_df to numpy array
-    X = df.values
-
-    return X, y
-
-
 def fill_missing_values(df):
     # Load the important variables file
     df_vars = pd.read_excel(important_vars_path)
@@ -1037,11 +985,8 @@ def fill_missing_values(df):
     return df
 
 
-def load_and_prepare_data(GLOBAL_DF_PATH):
+def load_and_prepare_data(GLOBAL_DF_PATH, EXPERIMENT_PATH):
     """Load and prepare the DataFrame for classification."""
-    # GLOBAL_DF_PATH = os.path.join(saved_result_path, "df", "df_Global_preprocessed.csv")
-
-    # print the path
     print("Global DataFrame path:", GLOBAL_DF_PATH)
 
     if not os.path.exists(GLOBAL_DF_PATH):
@@ -1053,20 +998,11 @@ def load_and_prepare_data(GLOBAL_DF_PATH):
     nRow, nCol = df.shape
     print(f'The DataFrame "df_preprocessed" contains {nRow} rows and {nCol} columns.')
 
-    # print("Columns:", df.columns)
-
-    # Remove rows where gendna is -998
-    # df = df[df["gendna"] != -998] # present in my df
-
-    # Preprocess target column, handle NaNs, and print DataFrame
-    # df = process_gendna_column(df)# present in my df
-    # Plot distribution of 'gendna_type'
-    plot_gendna_distribution(df)
-    # df = fill_missing_values(df)
+    plot_gendna_distribution(df, EXPERIMENT_PATH)
+    # print that distribution plot is saved
+    print(f"gendna distribution plot is saved in {EXPERIMENT_PATH}")
 
     mt_DNA_patients = df[df["gendna_type"] == 0]
-    # print("Number of mtDNA patients:", mt_DNA_patients.shape[0])
-    # print("mtDNA patients:", mt_DNA_patients["subjid"].values)
 
     return df, mt_DNA_patients
 
@@ -1110,7 +1046,10 @@ def process_feature_selection(
 
     # Remove missing values
 
-    if feature_selection == "pca":
+    if feature_selection == "mrmr_ff":
+        #TODO implement here meme
+        print("Feature ranking using MRMR_FF")
+    elif feature_selection == "pca":
         print("Starting PCA")
         imputer_X = SimpleImputer(strategy="mean")
         X_train = imputer_X.fit_transform(X_train)
