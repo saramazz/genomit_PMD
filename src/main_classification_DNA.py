@@ -63,18 +63,20 @@ from processing import *
 from plotting import *
 
 # Constants and Paths
-GLOBAL_DF_PATH = os.path.join(saved_result_path, "df", "df_no_symp.csv")
+GLOBAL_DF_PATH = os.path.join(saved_result_path, "df", "df_no_symp.csv")  # Reduced
 # GLOBAL_DF_PATH = os.path.join(saved_result_path, "df", "df_Global_preprocessed.csv")
 EXPERIMENT_PATH = os.path.join(
-    saved_result_path_classification, "experiments_all_models"
+    saved_result_path_classification, "experiments_all_models_2102"
 )
 
 # ask if consider patients with no sympthoms
-Input = input("Do you want to consider patients with no symptoms? (y/n)")
+Input = input(
+    "Do you want to consider df_symp patients with no symptoms? (y/n)"
+)  # Complete
 if Input == "y":
     GLOBAL_DF_PATH = os.path.join(saved_result_path, "df", "df_symp.csv")
     EXPERIMENT_PATH = os.path.join(
-        saved_result_path_classification, "experiments_all_models_all"
+        saved_result_path_classification, "experiments_all_models_all_2102"
     )
 
 
@@ -288,7 +290,7 @@ def main():
         EXPERIMENT_PATH,
     )
 
-    # input("Press Enter to start the classification...")
+    input("Press Enter to start the classification...")
 
     print("Starting the classification...")
 
@@ -342,44 +344,38 @@ def main():
         "XGBClassifier": (
             XGBClassifier(),
             {
-                "max_depth": [3, 6],  # Most impactful depths
-                "n_estimators": [50, 150],  # Reduced number of trees
-                "learning_rate": [0.01, 0.1],  # Wide range learning rates
+                "max_depth": [2, 5, 10, 20],  # Most impactful depths
+                "n_estimators": [
+                    50,
+                    100,
+                    200,
+                    300,
+                ],  # Reduced number of trees
+                "learning_rate": [0.01, 0.1, 0.2],  # Wide range learning rates
                 "subsample": [0.8, 1.0],  # Essential variations
-                "colsample_bytree": [0.8],  # Stable choice
-                "reg_alpha": [0],  # Skip regularization for complexity
-                "reg_lambda": [1],  # Default value
-            },
-        ),
-        "DecisionTreeClassifier": (
-            DecisionTreeClassifier(),
-            {
-                "max_depth": [None, 10],  # Reasonable depth for variety
-                "min_samples_split": [2, 5],  # Balance between depth and split
-                "min_samples_leaf": [1, 3],  # Potential lesser leaves
-                "criterion": ["gini"],  # Focus on Gini
-                "max_features": [None, "sqrt"],  # Practical options
-                "splitter": ["best"],  # Prescribed option
+                "colsample_bytree": [0.8, 1],  # Stable choice
             },
         ),
         "SVM": (
             SVC(),
             {
-                "C": [0.1, 1],  # Removed extremes
-                "gamma": [0.01, 0.1],  # Focus on usable range
-                "kernel": ["rbf"],  # Default kernel
+                "C": [0.001, 0.01, 0.1, 1, 10, 100, 1000],  # Removed extremes
+                "gamma": [0.001, 0.01, 0.1, 1, 10, 100, 1000],  # Focus on usable range
+                "kernel": ["linear", "rbf"],  # Default kernel
             },
         ),
         "RandomForestClassifier": (
             RandomForestClassifier(),
             {
-                "n_estimators": [100, 150],  # Balanced between speed and accuracy
-                "max_depth": [None, 10],  # Allow some depth flexibility
-                "min_samples_split": [2, 5],  # Regular split thresholds
-                "min_samples_leaf": [1, 2],  # Slight variant in leaves
-                "max_features": ["sqrt"],  # Use of out-of-the-box
-                "bootstrap": [True],  # Regular setting
-                "criterion": ["gini"],  # Standard impurity measure
+                "n_estimators": [
+                    50,
+                    100,
+                    200,
+                    300,
+                ],  # Reduced number of trees
+                "max_depth": [2, 5, 10, 20],  # Most impactful depths
+                "min_samples_split": [2, 5, 10, 20],  # Regular split thresholds
+                "min_samples_leaf": [1, 2, 5, 10],  # Slight variant in leaves
             },
         ),
     }
@@ -405,8 +401,8 @@ def main():
     # define the settings of the experiment
     balancing_techniques = [
         "no",
-        "over",
-        "under",
+        "smote",
+        "ada",
     ]
 
     feature_selection_options = [
@@ -417,7 +413,7 @@ def main():
         "mrmr_selected",
     ]  # ,MRMR
 
-    #feature_selection_options = [        "mrmr"    ]  # ,MRMR mrmr_selected means to give in input the list of feature calculated from mrmr in previous steps
+    # feature_selection_options = [        "mrmr"    ]  # ,MRMR mrmr_selected means to give in input the list of feature calculated from mrmr in previous steps
 
     # List to hold results of classifiers
     best_classifiers = []

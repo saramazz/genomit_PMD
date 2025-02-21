@@ -16,6 +16,9 @@ import shap  # for SHAP values
 
 # Imbalanced-learn library imports
 from imblearn.over_sampling import SMOTE
+#import ADASYN
+from imblearn.over_sampling import ADASYN
+
 from imblearn.under_sampling import RandomUnderSampler
 from imblearn.combine import SMOTEENN
 from imblearn.ensemble import BalancedRandomForestClassifier
@@ -863,7 +866,7 @@ def balance_data(X_train, y_train, X_test, y_test, balancing_technique):
             X_test_imputed,
             y_test,
         )  # No resampling for test data
-    elif balancing_technique == "over":
+    elif balancing_technique == "smote":
         # Apply oversampling to training data
         oversampler = SMOTE(random_state=42)
         X_train_resampled, y_train_resampled = oversampler.fit_resample(
@@ -873,6 +876,17 @@ def balance_data(X_train, y_train, X_test, y_test, balancing_technique):
             X_test_imputed,
             y_test,
         )  # No resampling for test data
+    elif balancing_technique == "ada":
+        # Apply oversampling to training data
+        oversampler = ADASYN(random_state=42) #TO DO update
+        X_train_resampled, y_train_resampled = oversampler.fit_resample(
+            X_train_imputed, y_train
+        )
+        X_test_resampled, y_test_resampled = (
+            X_test_imputed,
+            y_test,
+        )  # No resampling for test data
+
     elif balancing_technique == "unders_test":
         # Apply undersampling to both training and test data
         undersampler = RandomUnderSampler(random_state=42)
