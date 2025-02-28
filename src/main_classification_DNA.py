@@ -13,6 +13,8 @@ from itertools import combinations
 from datetime import datetime
 import os
 
+from sklearn.utils.class_weight import compute_class_weight
+
 # Third-party Library Imports
 import numpy as np
 import pandas as pd
@@ -80,6 +82,8 @@ else:
     )
 
 
+EXPERIMENT_PATH_RESULTS = os.path.join(EXPERIMENT_PATH, "results")
+
 # Ensure necessary directories exist
 os.makedirs(EXPERIMENT_PATH, exist_ok=True)
 
@@ -89,7 +93,9 @@ def setup_output(current_datetime):
 
     # file_name = f"classification_reports_{current_datetime}_mrmr.txt"
     # ask if rename the output file
-    ans = input("Do you want to rename the output file? (y/n)")
+    ans = input(
+        "Do you want to rename the output file? (y/n) Default is classification_reports_ALL.txt"
+    )
     if ans == "y":
         file_name = input(
             "Insert the name of the output file that follow classification_reports_: "
@@ -100,11 +106,9 @@ def setup_output(current_datetime):
     sys.stdout = open(os.path.join(EXPERIMENT_PATH, file_name), "w")
 
 
-# Modify this function
-def perform_classification_new(
+def perform_classification(
     clf_model,
     param_grid,
-    pipeline,
     X_train,
     X_test,
     y_train,
@@ -112,11 +116,14 @@ def perform_classification_new(
     kf,
     scorer,
     features,
+    feature_set,
     balancing_technique,
+    pf,
     feature_selection_option,
     results_path,
 ):
     """
+
     Perform classification using the specified classifier and evaluate performance.
 
     Parameters:
@@ -137,82 +144,9 @@ def perform_classification_new(
         best_estimator, best_score_, results_to_save
     """
 
-    # Initialize whether to use the feature selector
-    use_selector = False
-
-    # Check if feature selection should be used, assuming `mrmr` is only applicable for certain models
-    if feature_selection_option == "mrmr":
-        print("Use the selector")
-        use_selector = True
-
-    # create a pipeline if mrmr is  used
-    if feature_selection_option == "mrmr":
-        # Create the pipeline steps based on whether the selector is used
-        pipeline_steps = [("imputer", SimpleImputer(strategy="mean"))]
-
-        if use_selector:
-            # Configure the sequential feature selector
-            selector = SequentialFeatureSelector(
-                estimator=clf_model,
-                direction="forward",
-                scoring=scorer,
-                cv=kf,
-                n_jobs=-1,
-            )
-            # Add selector to the pipeline steps only if applicable
-            pipeline_steps.append(("selector", selector))
-
-        # Add classifier to the pipeline steps
-        pipeline_steps.append(("clf", clf_model))
-
-        # Create the pipeline using the specified steps
-        pipeline = Pipeline(pipeline_steps)
-
-        # Map parameter names to the pipeline format
-        param_grid = {f"clf__{param}": values for param, values in param_grid.items()}
-
-        # Map original hyperparameter names to pipeline format
-        if isinstance(clf_model, RandomForestClassifier):
-            new_keys = {
-                "n_estimators": "clf__n_estimators",
-                "max_depth": "clf__max_depth",
-                "min_samples_split": "clf__min_samples_split",
-                "min_samples_leaf": "clf__min_samples_leaf",
-                "max_features": "clf__max_features",
-            }
-        elif isinstance(clf_model, XGBClassifier):
-            new_keys = {
-                "max_depth": "clf__max_depth",
-                "n_estimators": "clf__n_estimators",
-                "learning_rate": "clf__learning_rate",
-                "subsample": "clf__subsample",
-                "colsample_bytree": "clf__colsample_bytree",
-                "reg_alpha": "clf__reg_alpha",
-            }
-        elif isinstance(clf_model, SVC):
-            new_keys = {
-                "C": "clf__C",
-                "gamma": "clf__gamma",
-                "kernel": "clf__kernel",
-            }
-        elif isinstance(clf_model, DecisionTreeClassifier):
-            new_keys = {
-                "max_depth": "clf__max_depth",
-                "criterion": "clf__criterion",
-                "min_samples_split": "clf__min_samples_split",
-                "min_samples_leaf": "clf__min_samples_leaf",
-                "max_features": "clf__max_features",
-            }
-        else:
-            new_keys = {k: f"clf__{k}" for k in param_grid.keys()}
-
-        # Update parameter grid to match pipeline configuration if mrmr
-        # if feature_selection_option == "mrmr":
-        param_grid = {new_keys.get(k, k): v for k, v in param_grid.items()}
-
     # Initialize GridSearchCV with the pipeline or model
     grid_search = GridSearchCV(
-        estimator=pipeline if feature_selection_option == "mrmr" else clf_model,
+        estimator=clf_model,
         param_grid=param_grid,
         cv=kf,  # kf, #TODO PUT IT on kf
         scoring=scorer,
@@ -232,8 +166,13 @@ def perform_classification_new(
     cv_results = grid_search.cv_results_
 
     # Evaluate on the test set
-    # y_pred = best_estimator.predict(X_test)
-    # conf_matrix = confusion_matrix(y_test, y_pred)
+    y_pred_train = best_estimator.predict(X_train)
+    accuracy_train = accuracy_score(y_train, y_pred_train)
+    f1_score_train = f1_score(y_train, y_pred_train)
+    conf_matrix_train = confusion_matrix(y_train, y_pred_train)
+    print(conf_matrix_train)
+    print(f"Training Accuracy: {accuracy_train:.3f}")
+    print(f"F1-score: {f1_score_train:.3f}")
 
     # Store results
     results_to_save = {
@@ -241,25 +180,30 @@ def perform_classification_new(
         "best_estimator": best_estimator,
         "best_score": best_score_,
         "cv_results": cv_results,
-        # "y_pred": y_pred,
         "y_test": y_test,
-        # "classification_report": classification_report(
-        # y_test, y_pred, output_dict=True
-        # ),
-        # "confusion_matrix": conf_matrix,
+        "feature set": feature_set,
+        "features": len(feature_set),
+        "sampling": balancing_technique,
+        "model": clf_model.__class__.__name__,
+        "hyperparameters": grid_search.best_params_,
+        "conf_matrix": conf_matrix_train,
+        "accuracy": accuracy_train,
+        "f1_score": f1_score_train,
     }
 
     # Create results directory if needed and save pickle
     os.makedirs(results_path, exist_ok=True)
     results_file_path = os.path.join(
         results_path,
-        f"{clf_model.__class__.__name__}_{balancing_technique}_{feature_selection_option}_results.pkl",
+        f"{clf_model.__class__.__name__}_{balancing_technique}_{feature_selection_option}_{pf}_{len(feature_set)}_results.pkl",
     )
     with open(results_file_path, "wb") as f:
         pickle.dump(results_to_save, f)
     print(f"Results saved to {results_file_path}")
 
-    return best_estimator, best_score_, results_to_save
+    best_scores = (f1_score_train, accuracy_train)
+
+    return best_estimator, best_score_, best_scores, results_to_save
 
 
 def main():
@@ -289,17 +233,19 @@ def main():
         num_folds,
     ) = experiment_definition(X, y, df, EXPERIMENT_PATH, mt_DNA_patients)
 
+    X_df = df.drop(columns=["subjid", "test"])
+
     print_data_info(
         X_train,
         X_test,
         y_train,
         y_test,
         features,
-        df.drop(columns=["subjid"]),
+        X_df,  # df.drop(columns=["subjid"]),
         EXPERIMENT_PATH,
     )
 
-    input("Press Enter to start the classification...")
+    # input("Press Enter to start the classification...")
 
     print("Starting the classification...")
 
@@ -366,16 +312,22 @@ def main():
     ]
 
     feature_selection_options = [
-        "no",
         "mrmr_ff",  # mrmr with forward feature selection
+        "no",
     ]
+
+    penalty = ["nopf", "pf"]
     # List to hold results of classifiers
     best_classifiers = []
+    # Store all models and configurations
+    all_scores = []
+    all_models = []
+    all_configs = []
 
     # Iterate over each classifier and configuration
     for classifier, (clf_model, param_grid) in classifiers.items():
         print("^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n")
-        pipeline = Pipeline([("clf", clf_model)])  # Create pipeline to clf
+        #pipeline = Pipeline([("clf", clf_model)])  # Create pipeline to clf
 
         """# Decrease
         samples = 30
@@ -385,75 +337,140 @@ def main():
         y_test = y_test[:samples]
         """
 
-        for feature_selection_option in feature_selection_options:
-            (
-                X_train_selected,
-                X_test_selected,
-                param_grid_selected,
-                pipeline_selected,
-            ) = process_feature_selection(
-                clf_model,
-                df,
-                X_train,
-                X_test,
-                y_train,
-                param_grid,
-                pipeline,
-                scorer,
-                kf,
-                feature_selection_option,
-                features,
-                num_folds,
-                nFeatures,
-                thr,
-            )
+        for pf in penalty:
+            print("Penalty factor:", pf)
 
-            for balancing_technique in balancing_techniques:
-                print("------------------------------------------------------------\n")
-                print(
-                    f"Classifier: {classifier}, Balancing Technique: {balancing_technique}, Feature Selection Option: {feature_selection_option}"
-                )
+            # Print before scaling
+            # print("Before scaling:")
+            # print("X_train sample:\n", X_train[:5])  # Print first 5 rows
+            # print("X_test sample:\n", X_test[:5])
 
-                # Balance data
-                X_train_bal, y_train_bal, X_test_bal, y_test_bal = balance_data(
-                    X_train_selected,
-                    y_train,
-                    X_test_selected,
-                    y_test,
-                    balancing_technique,
-                )
+            # Perform scaling and apply penalty factor if required
+            X_train_scaled, X_test_scaled = scale_data(X_train, X_test, pf)
 
-                # Perform classification and collect results
-                best_estimator, best_score, results = perform_classification_new(
-                    clf_model,
-                    param_grid_selected,
-                    pipeline_selected,
-                    X_train_bal,
-                    X_test_bal,
-                    y_train_bal,
-                    y_test_bal,
-                    kf,
-                    scorer,
-                    features,
-                    balancing_technique,
-                    feature_selection_option,
-                    results_path=EXPERIMENT_PATH,
-                )
+            # print X_df.columns
+            # print X_df.columns
+            print("X_df columns:", X_df.columns)
 
-                # Track best classifiers
-                best_classifiers.append(
-                    (classifier, best_estimator, best_score, results)
-                )
+            # convert to df
+            X_train_scaled_df = pd.DataFrame(X_train_scaled, columns=X_df.columns)
+            X_test_scaled_df = pd.DataFrame(X_test_scaled, columns=X_df.columns)
+            y_train_df = pd.DataFrame(y_train, columns=["gendna_type"])
 
-                # Print the training performances
-                print("Training performances:")
-                print("Best score:", best_score)
-                print("Best estimator:", best_estimator)
-                # print("Results:", results)
+            # Print after scaling
+            # print("\nAfter scaling:")
+            # print("X_train_scaled sample:\n", X_train_scaled[:5])
+            # print("X_test_scaled sample:\n", X_test_scaled[:5])
 
-                # print end of training
-                print("End of training")
-                print("------------------------------------------------------------\n")
+            # input("Press Enter to continue...")
+
+            for feature_selection_option in feature_selection_options:
+                print("Processing feature selection option:", feature_selection_option)
+                if feature_selection_option == "no":
+                    print("No feature selection, using all features.")
+                    feature_sets = [X_df.columns]
+                else:
+                    # Perform feature selection with mRMR and forward feature selection
+                    print(
+                        "Performing feature selection with mRMR and forward feature selection."
+                    )
+                    feature_sets = process_feature_selection_mrmr_ff(
+                        X_train_scaled_df, y_train_df
+                    )
+                    print("Feature sets created:", feature_sets)
+                if not feature_sets:
+                    print(
+                        "Warning: No feature sets were generated by the feature selection process."
+                    )
+
+                for feature_set in feature_sets:
+                    print("Processing feature set:", feature_set)
+                    #print len of feature_set
+                    print("Length of feature set:", len(feature_set))
+                    X_train_subset = X_train_scaled_df[feature_set]
+                    X_test_subset = X_test_scaled_df[feature_set]
+
+
+
+                    for balancing_technique in balancing_techniques:
+                        print(
+                            "------------------------------------------------------------\n"
+                        )
+                        print(
+                            f"Classifier: {classifier}, Balancing Technique: {balancing_technique}, Feature Selection Option: {feature_selection_option}, Penalty Factor: {pf}"
+                        )
+
+                        # Balance data
+                        X_train_bal, y_train_bal, X_test_bal, y_test_bal = balance_data(
+                            X_train_subset,
+                            y_train,
+                            X_test_subset,
+                            y_test,
+                            balancing_technique,
+                        )
+
+                        # Print the dimension of the data
+                        print("X_train_bal shape:", X_train_bal.shape)
+                        print("X_test_bal shape:", X_test_bal.shape)
+
+                        '''
+                        # Compute class weights
+                        class_weights = compute_class_weight(
+                            "balanced", classes=np.unique(y_train_bal), y=y_train_bal
+                        )
+                        class_weight_dict = dict(
+                            zip(np.unique(y_train_bal), class_weights)
+                        )
+
+                        # Add the class_weight_dict to the model if it is not SVM
+                        if classifier != "SVM":
+                            # Set the class_weight parameter if the classifier supports it
+                            clf_model.set_params(class_weight=class_weight_dict)
+                            '''
+
+                        # Perform classification and collect results
+                        best_estimator, best_score, best_scores, results = (
+                            perform_classification(
+                                clf_model,
+                                param_grid,
+                                X_train_bal,
+                                X_test_bal,
+                                y_train_bal,
+                                y_test_bal,
+                                kf,
+                                scorer,
+                                features,
+                                feature_set,
+                                balancing_technique,
+                                pf,
+                                feature_selection_option,
+                                results_path=EXPERIMENT_PATH_RESULTS,
+                            )
+                        )
+
+                        # Save all models and configurations
+                        all_scores.append(best_scores)
+                        all_models.append(
+                            best_estimator
+                        )  # grid_search.best_estimator_)
+                        all_configs.append(results)
+
+                        # Track best classifiers
+                        best_classifiers.append(
+                            (classifier, best_estimator, best_score, results)
+                        )
+
+                        # Print the training performances
+                        print("Training performances:")
+                        print("Best score:", best_score)
+                        print("Best estimator:", best_estimator)
+                        # print("Results:", results)
+
+                        # print end of training
+                        print("End of training")
+                        print(
+                            "------------------------------------------------------------\n"
+                        )
 
     results_file_path = os.path.join(
         EXPERIMENT_PATH, f"all_classifiers_{current_datetime}.pkl"
@@ -482,6 +499,69 @@ def main():
     print(f"Results saved to {results_file_path}")
     # print that classification is done
     print("Classification is done and best classifier is saved")
+
+    # Sort the scores in descending order based on the F1-score (first value in tuple), keeping corresponding accuracy (second value)
+    sorted_scores_with_indices = sorted(
+        enumerate(all_scores), key=lambda x: x[1][0], reverse=True
+    )
+
+    # Ask user to choose the best model for testing
+    print("\nChoose the best model configuration for the test set:")
+    for idx, (original_idx, (f1_training, accuracy_training)) in enumerate(
+        sorted_scores_with_indices
+    ):
+        print(
+            f"{original_idx + 1}: F1-score = {f1_training:.3f}, Accuracy = {accuracy_training:.3f}"
+        )
+
+    model_idx = (
+        int(input("Enter the index number of the model to evaluate on the test set: "))
+        - 1
+    )
+
+    # Evaluate selected model
+    selected_model = all_models[model_idx]
+    selected_config = all_configs[model_idx]
+    print("\nEvaluating Best Model on Test Set:")
+
+    y_pred = selected_model.predict(X_test_scaled_df[selected_config["feature set"]])
+
+    accuracy = accuracy_score(y_test, y_pred)
+    precision = precision_score(y_test, y_pred)
+    recall = recall_score(y_test, y_pred)
+    f1 = f1_score(y_test, y_pred)
+
+    print("\nTest Set Performance:")
+    print(f"Accuracy: {accuracy:.3f}")
+    print(f"F1-score: {f1:.3f}")
+    print(f"Precision: {precision:.3f}")
+    print(f"Recall: {recall:.3f}")
+
+    # Confusion Matrix
+    conf_matrix = confusion_matrix(y_test, y_pred)
+    plt.figure(figsize=(6, 4))
+    sns.heatmap(
+        conf_matrix,
+        annot=True,
+        fmt="d",
+        cmap="Blues",
+        xticklabels=["nDNA", "mtDNA"],
+        yticklabels=["nDNA", "mtDNA"],
+    )
+    plt.xlabel("Predicted Label")
+    plt.ylabel("True Label")
+    plt.title("Confusion Matrix of Selected Model")
+    # save the confusion matrix
+    plt.savefig(os.path.join(EXPERIMENT_PATH, "confusion_matrix_best.png"))
+
+    # Assuming that mtDNA is the positive class, compute sensitivity and specificity
+    spec = conf_matrix[0, 0] / (conf_matrix[0, 0] + conf_matrix[0, 1])
+    sens = conf_matrix[1, 1] / (conf_matrix[1, 0] + conf_matrix[1, 1])
+    print(f"Sensitivity: {sens:.3f}")
+    print(f"Specificity: {spec:.3f}")
+
+    # print end of the script
+    print("End of the script")
 
 
 if __name__ == "__main__":

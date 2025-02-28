@@ -82,6 +82,8 @@ from preprocessing import *
 
 # import PCA
 from sklearn.decomposition import PCA
+from mrmr import mrmr_classif
+from sklearn.impute import SimpleImputer
 
 
 # %% Feature ranking on the training set using cross-validation
@@ -353,15 +355,15 @@ def experiment_definition(X, y, X_df, saving_path, mt_DNA_patients, num_folds=5)
     if not os.path.exists(classifier_config_path):
         print("Classifier configuration does not exist. Creating the configuration...")
 
-        #consider the column test of the df and filter the test subjects
+        # consider the column test of the df and filter the test subjects
         test_subjects_ids = X_df[X_df["test"] == 1]["subjid"].values
 
-        #remove the test column
+        # remove the test column
         X_df = X_df.drop(columns=["test"])
-        
-        # print the length of test_subjects_ids 
+
+        # print the length of test_subjects_ids
         print("Length of test_subjects_ids: ", len(test_subjects_ids))
-        
+
         input("Press Enter to continue...")
         # Set up KFold
         kf_path = os.path.join(saved_result_path_classification, "kf.pkl")
@@ -452,72 +454,165 @@ def experiment_definition(X, y, X_df, saving_path, mt_DNA_patients, num_folds=5)
     )
 
 
-"""
+def perform_classification_new(
+    clf_model,
+    param_grid,
+    pipeline,
+    X_train,
+    X_test,
+    y_train,
+    y_test,
+    kf,
+    scorer,
+    features,
+    balancing_technique,
+    feature_selection_option,
+    results_path,
+):
+    """
+    Perform classification using the specified classifier and evaluate performance.
 
-    # Evaluate model on the test set
-    y_pred = best_estimator.predict(X_test)
+    Parameters:
+        clf_model: Classifier model object.
+        param_grid: Parameter grid for grid search.
+        X_train (array-like): Features of the training set.
+        X_test (array-like): Features of the test set.
+        y_train (array-like): Target variable of the training set.
+        y_test (array-like): Target variable of the test set.
+        kf (KFold): Cross-validation iterator.
+        scorer (object): Scorer for model evaluation.
+        features (list): List of feature names.
+        balancing_technique (str): Balancing technique used.
+        feature_selection_option (str): Feature selection option used.
+        results_path (str): Path to save classification results.
 
-    print("Best Parameters:\n", best_params)
-    print("Classification Report:\n", classification_report(y_test, y_pred))
+    Returns:
+        best_estimator, best_score_, results_to_save
+    """
 
-    # Confusion Matrix
-    conf_matrix = confusion_matrix(y_test, y_pred)
-    print("Confusion Matrix:\n", conf_matrix)
+    # Initialize whether to use the feature selector
+    use_selector = False
 
-    # Feature Importances
-    importances = None
-    feature_importance_data = None
-    if hasattr(best_estimator, "feature_importances_"):
-        importances = best_estimator.feature_importances_
-        indices_all = np.argsort(importances)
-        feature_importance_data = {
-            "feature_importances": {features[i]: importances[i] for i in range(len(importances))},
-            "top_10_features": {features[i]: importances[i] for i in indices_all[-10:]}
-        }
-        plot_top_feature_importance(importances, features, clf_model.__class__.__name__, results_path)
+    # Check if feature selection should be used, assuming `mrmr` is only applicable for certain models
+    if feature_selection_option == "mrmr":
+        print("Use the selector")
+        use_selector = True
 
+    # create a pipeline if mrmr is  used
+    if feature_selection_option == "mrmr":
+        # Create the pipeline steps based on whether the selector is used
+        pipeline_steps = [("imputer", SimpleImputer(strategy="mean"))]
 
-    #Save the results
-    # Saving results
+        if use_selector:
+            # Configure the sequential feature selector
+            selector = SequentialFeatureSelector(
+                estimator=clf_model,
+                direction="forward",
+                scoring=scorer,
+                cv=kf,
+                n_jobs=-1,
+            )
+            # Add selector to the pipeline steps only if applicable
+            pipeline_steps.append(("selector", selector))
+
+        # Add classifier to the pipeline steps
+        pipeline_steps.append(("clf", clf_model))
+
+        # Create the pipeline using the specified steps
+        pipeline = Pipeline(pipeline_steps)
+
+        # Map parameter names to the pipeline format
+        param_grid = {f"clf__{param}": values for param, values in param_grid.items()}
+
+        # Map original hyperparameter names to pipeline format
+        if isinstance(clf_model, RandomForestClassifier):
+            new_keys = {
+                "n_estimators": "clf__n_estimators",
+                "max_depth": "clf__max_depth",
+                "min_samples_split": "clf__min_samples_split",
+                "min_samples_leaf": "clf__min_samples_leaf",
+                "max_features": "clf__max_features",
+            }
+        elif isinstance(clf_model, XGBClassifier):
+            new_keys = {
+                "max_depth": "clf__max_depth",
+                "n_estimators": "clf__n_estimators",
+                "learning_rate": "clf__learning_rate",
+                "subsample": "clf__subsample",
+                "colsample_bytree": "clf__colsample_bytree",
+                "reg_alpha": "clf__reg_alpha",
+            }
+        elif isinstance(clf_model, SVC):
+            new_keys = {
+                "C": "clf__C",
+                "gamma": "clf__gamma",
+                "kernel": "clf__kernel",
+            }
+        elif isinstance(clf_model, DecisionTreeClassifier):
+            new_keys = {
+                "max_depth": "clf__max_depth",
+                "criterion": "clf__criterion",
+                "min_samples_split": "clf__min_samples_split",
+                "min_samples_leaf": "clf__min_samples_leaf",
+                "max_features": "clf__max_features",
+            }
+        else:
+            new_keys = {k: f"clf__{k}" for k in param_grid.keys()}
+
+        # Update parameter grid to match pipeline configuration if mrmr
+        # if feature_selection_option == "mrmr":
+        param_grid = {new_keys.get(k, k): v for k, v in param_grid.items()}
+
+    # Initialize GridSearchCV with the pipeline or model
+    grid_search = GridSearchCV(
+        estimator=pipeline if feature_selection_option == "mrmr" else clf_model,
+        param_grid=param_grid,
+        cv=kf,  # kf, #TODO PUT IT on kf
+        scoring=scorer,
+        verbose=1,  # TODO put on 1
+        n_jobs=-1,
+        return_train_score=True,
+    )
+
+    grid_search.fit(X_train, y_train)
+
+    # Extract results
+    best_params = grid_search.best_params_
+    best_estimator = grid_search.best_estimator_
+    best_score_ = (
+        grid_search.best_score_
+    )  # performance metric of the best_estimator on the train set
+    cv_results = grid_search.cv_results_
+
+    # Evaluate on the test set
+    # y_pred = best_estimator.predict(X_test)
+    # conf_matrix = confusion_matrix(y_test, y_pred)
+
+    # Store results
     results_to_save = {
-        "name": clf_model.__class__.__name__,
         "best_params": best_params,
         "best_estimator": best_estimator,
         "best_score": best_score_,
         "cv_results": cv_results,
-        "y_pred": y_pred,
+        # "y_pred": y_pred,
         "y_test": y_test,
-        "classification_report": classification_report(y_test, y_pred, output_dict=True),
-        "confusion_matrix": conf_matrix,
-        "importances": importances,
-        "feature_importance_data": feature_importance_data,
+        # "classification_report": classification_report(
+        # y_test, y_pred, output_dict=True
+        # ),
+        # "confusion_matrix": conf_matrix,
     }
 
-    # Path to save the results
-    # Make directory path
-    model_results_path = os.path.join(results_path, clf_model.__class__.__name__)
-
-    # Create directories if they do not exist
-    os.makedirs(model_results_path, exist_ok=True)
-
-    # Path to save the results
-    results_file_path = os.path.join(model_results_path, f"clf_results_{clf_model.__class__.__name__}_{feature_selection_option}_{balancing_technique}.pkl")
+    # Create results directory if needed and save pickle
+    os.makedirs(results_path, exist_ok=True)
+    results_file_path = os.path.join(
+        results_path,
+        f"{clf_model.__class__.__name__}_{balancing_technique}_{feature_selection_option}_results.pkl",
+    )
     with open(results_file_path, "wb") as f:
-        pickle.dump(results_to_save, f)    
+        pickle.dump(results_to_save, f)
     print(f"Results saved to {results_file_path}")
-    
-    
 
-    # Use your updated plot_confusion_matrix function
-    confusion_matrix_file = f"cm_{clf_model.__class__.__name__}_{feature_selection_option}_{balancing_technique}"
-    plot_confusion_matrix(y_test, y_pred, confusion_matrix_file)
-
-
-    # SHAP Values
-    if hasattr(best_estimator, "predict_proba"):
-        plot_shap_values(best_estimator, X_train, results_path, clf_model.__class__.__name__, feature_selection_option, balancing_technique)
-
-"""
+    return best_estimator, best_score_, results_to_save
 
 
 def perform_classification_best(  # it is also saving the best model results
@@ -805,9 +900,6 @@ def perform_classification_best(  # it is also saving the best model results
     print(f"Best estimator saved to {best_estimator_file}")
 
 
-from sklearn.impute import SimpleImputer
-
-
 def balance_data(X_train, y_train, X_test, y_test, balancing_technique):
     """
     Balance the data using the specified balancing technique.
@@ -861,7 +953,6 @@ def balance_data(X_train, y_train, X_test, y_test, balancing_technique):
             X_test_imputed,
             y_test,
         )  # No resampling for test data
-
     elif balancing_technique == "unders_test":
         # Apply undersampling to both training and test data
         undersampler = RandomUnderSampler(random_state=42)
@@ -984,7 +1075,6 @@ def fill_missing_values(df):
             # df[column].fillna(998, inplace=True)
     return df
 
-
 def load_and_prepare_data(GLOBAL_DF_PATH, EXPERIMENT_PATH):
     """Load and prepare the DataFrame for classification."""
     print("Global DataFrame path:", GLOBAL_DF_PATH)
@@ -1006,6 +1096,21 @@ def load_and_prepare_data(GLOBAL_DF_PATH, EXPERIMENT_PATH):
 
     return df, mt_DNA_patients
 
+def process_feature_selection_mrmr_ff(X_train, y_train):
+    """
+    Process feature selection using MRMR_FF.
+    """
+    num_features = X_train.shape[1]
+    selected_features = mrmr_classif(X_train, y_train, K=num_features)
+    print("Selected Features:", selected_features)
+    print("Length of selected features:", len(selected_features))
+
+    # Create feature sets in increasing length order
+    feature_sets = [
+        selected_features[:i] for i in range(1, len(selected_features) + 1)
+    ]
+
+    return feature_sets
 
 def process_feature_selection(
     clf_model,
@@ -1047,8 +1152,24 @@ def process_feature_selection(
     # Remove missing values
 
     if feature_selection == "mrmr_ff":
-        #TODO implement here meme
         print("Feature ranking using MRMR_FF")
+        # convert to dataframe
+        X_train = pd.DataFrame(X_train, columns=X_df.columns)
+        y_train = pd.DataFrame(y_train, columns=["gendna_type"])
+
+        num_features = X_train.shape[1]
+        print("Number of features:", num_features)
+
+        selected_features = mrmr_classif(X_train, y_train, K=num_features)
+        print("Selected Features:", selected_features)
+
+        # Create feature sets in increasing length order
+        feature_sets = [
+            selected_features[:i] for i in range(1, len(selected_features) + 1)
+        ]
+        print("Feature Sets:", feature_sets)
+        input("Press Enter to continue...")
+
     elif feature_selection == "pca":
         print("Starting PCA")
         imputer_X = SimpleImputer(strategy="mean")
@@ -1291,3 +1412,33 @@ def process_feature_selection(
         pipeline_selected = pipeline
 
     return X_train_selected, X_test_selected, param_grid_selected, pipeline_selected
+
+def scale_data(X_train, X_test, pf="nopf"):
+    """
+    Standardizes the data and, if requested, applies a penalty factor
+    based on the proportion of missing values (-998) in X_train.
+
+    Args:
+        X_train (np.ndarray): Training data.
+        X_test (np.ndarray): Test data.
+        pf (str): If not 'nopf', applies the penalty factor.
+
+    Returns:
+        np.ndarray, np.ndarray: Transformed X_train and X_test.
+    """
+    # Standardization
+    scaler = StandardScaler()
+    X_train_scaled = scaler.fit_transform(X_train)
+    X_test_scaled = scaler.transform(X_test)
+
+    # Apply penalty factor if requested
+    if pf != "nopf":
+        missing_ratios = np.mean(
+            X_train == -998, axis=0
+        )  # Proportion of missing values per feature
+        penalty_factors = 1 - missing_ratios  # Compute the penalty factor
+
+        X_train_scaled *= penalty_factors
+        X_test_scaled *= penalty_factors
+
+    return X_train_scaled, X_test_scaled
