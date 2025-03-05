@@ -191,15 +191,24 @@ def perform_classification(
         "f1_score": f1_score_train,
     }
 
-    # Create results directory if needed and save pickle
+    # Create results directory if needed
     os.makedirs(results_path, exist_ok=True)
-    results_file_path = os.path.join(
-        results_path,
+    results_file_path_cl = os.path.join(results_path, f"{clf_model.__class__.__name__}")
+
+    # Ensure now that results_file_path_cl is a directory
+    os.makedirs(results_file_path_cl, exist_ok=True)
+
+    # Construct file path, this should be a file, not directory
+    results_file_path_complete = os.path.join(
+        results_file_path_cl,
         f"{clf_model.__class__.__name__}_{balancing_technique}_{feature_selection_option}_{pf}_{len(feature_set)}_results.pkl",
     )
-    with open(results_file_path, "wb") as f:
+
+    # Save results to file
+    with open(results_file_path_complete, "wb") as f:
         pickle.dump(results_to_save, f)
-    print(f"Results saved to {results_file_path}")
+
+    print(f"Results saved to {results_file_path_complete}")
 
     best_scores = (f1_score_train, accuracy_train)
 
@@ -212,6 +221,9 @@ def main():
     # Load and preprocess data
     df, mt_DNA_patients = load_and_prepare_data(GLOBAL_DF_PATH, EXPERIMENT_PATH)
     # remove gendna_type from the features
+
+    # reduce rows of the df
+    # df = df[:100]
 
     X, y = define_X_y(df)
     df = df.drop(columns=["gendna_type", "Unnamed: 0"])
@@ -249,22 +261,20 @@ def main():
 
     print("Starting the classification...")
 
-    classifiers = {  # light
+    classifiers_l = {  # light
         "XGBClassifier": (
             XGBClassifier(),
             {
-                "max_depth": [3, 6],  # Essential depths
-                "n_estimators": [50, 150],  # Key numbers of trees
-                "learning_rate": [0.1],  # Commonly effective rate
+                "max_depth": [3],  # Essential depths
+                "n_estimators": [50],  # Key numbers of trees
+                "learning_rate": [0.5],  # Commonly effective rate
                 "subsample": [1.0],  # Full sample
                 "colsample_bytree": [0.8],  # Single choice for simplicity
-                "reg_alpha": [0],  # No regularization
-                "reg_lambda": [1],  # Default value
             },
         ),
     }
 
-    classifiers_final = {
+    classifiers = {
         "XGBClassifier": (
             XGBClassifier(),
             {
@@ -327,7 +337,7 @@ def main():
     # Iterate over each classifier and configuration
     for classifier, (clf_model, param_grid) in classifiers.items():
         print("^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n")
-        #pipeline = Pipeline([("clf", clf_model)])  # Create pipeline to clf
+        # pipeline = Pipeline([("clf", clf_model)])  # Create pipeline to clf
 
         """# Decrease
         samples = 30
@@ -385,12 +395,10 @@ def main():
 
                 for feature_set in feature_sets:
                     print("Processing feature set:", feature_set)
-                    #print len of feature_set
+                    # print len of feature_set
                     print("Length of feature set:", len(feature_set))
                     X_train_subset = X_train_scaled_df[feature_set]
                     X_test_subset = X_test_scaled_df[feature_set]
-
-
 
                     for balancing_technique in balancing_techniques:
                         print(
@@ -413,7 +421,7 @@ def main():
                         print("X_train_bal shape:", X_train_bal.shape)
                         print("X_test_bal shape:", X_test_bal.shape)
 
-                        '''
+                        """
                         # Compute class weights
                         class_weights = compute_class_weight(
                             "balanced", classes=np.unique(y_train_bal), y=y_train_bal
@@ -426,7 +434,7 @@ def main():
                         if classifier != "SVM":
                             # Set the class_weight parameter if the classifier supports it
                             clf_model.set_params(class_weight=class_weight_dict)
-                            '''
+                            """
 
                         # Perform classification and collect results
                         best_estimator, best_score, best_scores, results = (
@@ -513,11 +521,20 @@ def main():
         print(
             f"{original_idx + 1}: F1-score = {f1_training:.3f}, Accuracy = {accuracy_training:.3f}"
         )
+    # find the best model idx using the max f1 score and the max accuracy
+    best_model_idx = sorted_scores_with_indices[0][0]
+    print(f"Best model index: {best_model_idx + 1}")
+    # print the best model
+    print("Best Model:")
+    print(all_configs[best_model_idx])
+    print("Best Model F1-score:", all_scores[best_model_idx][0])
+    print("Best Model Accuracy:", all_scores[best_model_idx][1])
 
-    model_idx = (
+    model_idx = best_model_idx - 1  #
+    """(
         int(input("Enter the index number of the model to evaluate on the test set: "))
         - 1
-    )
+    )"""
 
     # Evaluate selected model
     selected_model = all_models[model_idx]
@@ -537,28 +554,54 @@ def main():
     print(f"Precision: {precision:.3f}")
     print(f"Recall: {recall:.3f}")
 
-    # Confusion Matrix
-    conf_matrix = confusion_matrix(y_test, y_pred)
-    plt.figure(figsize=(6, 4))
-    sns.heatmap(
-        conf_matrix,
-        annot=True,
-        fmt="d",
-        cmap="Blues",
-        xticklabels=["nDNA", "mtDNA"],
-        yticklabels=["nDNA", "mtDNA"],
+    conf_mat = confusion_matrix(y_test, y_pred)
+    class_labels = ["nDNA", "mtDNA"]
+    group_names = ["TN", "FP", "FN", "TP"]
+    group_counts = [f"{value:0.0f}" for value in conf_mat.flatten()]
+    labels = np.asarray(
+        [f"{v1}\n{v2}" for v1, v2 in zip(group_names, group_counts)]
+    ).reshape(2, 2)
+
+    sns_plot = sns.heatmap(
+        conf_mat, annot=labels, fmt="", cmap="Blues", annot_kws={"size": 18}
     )
     plt.xlabel("Predicted Label")
     plt.ylabel("True Label")
-    plt.title("Confusion Matrix of Selected Model")
-    # save the confusion matrix
-    plt.savefig(os.path.join(EXPERIMENT_PATH, "confusion_matrix_best.png"))
+    plt.xticks(ticks=[0.5, 1.5], labels=class_labels)
+    plt.yticks(ticks=[0.5, 1.5], labels=class_labels)
+    figure = plt.gcf()
+    figure.set_size_inches(7, 6)
+    plt.savefig(
+        os.path.join(EXPERIMENT_PATH, "confusion_matrix_best.png"),
+        format="png",
+        bbox_inches="tight",
+    )
+    plt.close()
 
     # Assuming that mtDNA is the positive class, compute sensitivity and specificity
-    spec = conf_matrix[0, 0] / (conf_matrix[0, 0] + conf_matrix[0, 1])
-    sens = conf_matrix[1, 1] / (conf_matrix[1, 0] + conf_matrix[1, 1])
+    spec = conf_mat[0, 0] / (conf_mat[0, 0] + conf_mat[0, 1])
+    sens = conf_mat[1, 1] / (conf_mat[1, 0] + conf_mat[1, 1])
     print(f"Sensitivity: {sens:.3f}")
     print(f"Specificity: {spec:.3f}")
+
+    names = selected_config["feature set"]
+    print("Feature set:", names)
+    print("Length of feature set:", len(names))
+
+    # try importances otherwise print the error
+    try:
+        importances = selected_model.feature_importances_
+        names = selected_config["feature set"]  # X_df.columns
+        model_type = selected_model.__class__.__name__
+        plot_top_feature_importance(
+            importances,
+            names,
+            model_type,
+            save_path=EXPERIMENT_PATH,
+            top_n=10,
+        )
+    except Exception as e:
+        print("Error in feature importance:", e)
 
     # print end of the script
     print("End of the script")

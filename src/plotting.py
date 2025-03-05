@@ -152,7 +152,7 @@ def plot_gendna_distribution(df, EXPERIMENT_PATH):
     class_counts.index = class_counts.index.map(class_labels.get)
 
     # Debug statements to check accuracy of class counts
-    print(f"Class counts after mapping: {class_counts}")
+    #print(f"Class counts after mapping: {class_counts}")
 
     # Use seaborn color palette for shades of blue
     colors = sns.color_palette("Blues", len(class_counts))
@@ -174,7 +174,7 @@ def plot_gendna_distribution(df, EXPERIMENT_PATH):
     my_file = "gendna_distribution_pie_n_mt.png"
     plot_path = os.path.join(EXPERIMENT_PATH, my_file)
     plt.savefig(plot_path, bbox_inches="tight")
-    print(f"gendna distribution plot saved at {plot_path}")
+    #print(f"gendna distribution plot saved at {plot_path}")
     plt.close()
 
 
@@ -259,7 +259,7 @@ def plot_confusion_matrix(y_true, y_pred, file_name):
     plt.close()
 
 
-def plot_top_feature_importance(importances, names, model_type, save_path, top_n=10):
+def plot_top_feature_importance_old(importances, names, model_type, save_path, top_n=10):
     feature_importance = np.array(importances)
     feature_names = np.array(names)
 
@@ -279,6 +279,29 @@ def plot_top_feature_importance(importances, names, model_type, save_path, top_n
     my_file = f"Top_{top_n}_Feature_importance_{model_type}.png"
     plt.savefig(os.path.join(save_path, my_file), bbox_inches="tight")
     plt.close()
+
+def plot_top_feature_importance(importances, names, model_type, save_path, top_n=10):
+    feature_importance = np.array(importances)
+    feature_names = np.array(names)
+
+    data = {"feature_names": feature_names, "feature_importance": feature_importance}
+    fi_df = (
+        pd.DataFrame(data)
+        .sort_values(by="feature_importance", ascending=False)
+        .head(top_n)
+    )
+
+    plt.figure(figsize=(10, 8))
+    # Use the Blues palette with a specified number of shades (e.g., top_n)
+    sns.barplot(x="feature_importance", y="feature_names", data=fi_df, palette="Blues_d")
+    plt.xlabel("FEATURE IMPORTANCE")
+    plt.ylabel("FEATURE NAMES")
+    plt.title(f"Top {top_n} Features - {model_type}")
+
+    my_file = f"Top_{top_n}_Feature_importance_{model_type}.png"
+    plt.savefig(os.path.join(save_path, my_file), bbox_inches="tight")
+    plt.close()
+
 
 
 def plot_shap_values(

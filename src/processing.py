@@ -364,7 +364,7 @@ def experiment_definition(X, y, X_df, saving_path, mt_DNA_patients, num_folds=5)
         # print the length of test_subjects_ids
         print("Length of test_subjects_ids: ", len(test_subjects_ids))
 
-        input("Press Enter to continue...")
+        #input("Press Enter to continue...")
         # Set up KFold
         kf_path = os.path.join(saved_result_path_classification, "kf.pkl")
         if os.path.exists(kf_path):
@@ -1075,6 +1075,7 @@ def fill_missing_values(df):
             # df[column].fillna(998, inplace=True)
     return df
 
+
 def load_and_prepare_data(GLOBAL_DF_PATH, EXPERIMENT_PATH):
     """Load and prepare the DataFrame for classification."""
     print("Global DataFrame path:", GLOBAL_DF_PATH)
@@ -1096,6 +1097,7 @@ def load_and_prepare_data(GLOBAL_DF_PATH, EXPERIMENT_PATH):
 
     return df, mt_DNA_patients
 
+
 def process_feature_selection_mrmr_ff(X_train, y_train):
     """
     Process feature selection using MRMR_FF.
@@ -1106,11 +1108,10 @@ def process_feature_selection_mrmr_ff(X_train, y_train):
     print("Length of selected features:", len(selected_features))
 
     # Create feature sets in increasing length order
-    feature_sets = [
-        selected_features[:i] for i in range(1, len(selected_features) + 1)
-    ]
+    feature_sets = [selected_features[:i] for i in range(1, len(selected_features) + 1)]
 
     return feature_sets
+
 
 def process_feature_selection(
     clf_model,
@@ -1168,7 +1169,7 @@ def process_feature_selection(
             selected_features[:i] for i in range(1, len(selected_features) + 1)
         ]
         print("Feature Sets:", feature_sets)
-        input("Press Enter to continue...")
+        #input("Press Enter to continue...")
 
     elif feature_selection == "pca":
         print("Starting PCA")
@@ -1412,6 +1413,7 @@ def process_feature_selection(
         pipeline_selected = pipeline
 
     return X_train_selected, X_test_selected, param_grid_selected, pipeline_selected
+
 
 def scale_data(X_train, X_test, pf="nopf"):
     """
