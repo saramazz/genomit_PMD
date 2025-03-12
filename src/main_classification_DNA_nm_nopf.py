@@ -102,7 +102,7 @@ def setup_output(current_datetime):
         )
         file_name = f"classification_reports_{file_name}.txt"
     else:
-        file_name = f"classification_reports_{current_datetime}_pf.txt"  # ALL.txt"  # {current_datetime}_mrmr.txt"
+        file_name = f"classification_reports_{current_datetime}_nopf.txt"  # ALL.txt"  # {current_datetime}_mrmr.txt"
     # print the results are saved in the file
     print(f"Results are saved in the file: {file_name}")
     # sys.stdout = open(os.path.join(EXPERIMENT_PATH, file_name), "w")
@@ -146,7 +146,7 @@ def perform_classification(
         best_estimator, best_score_, results_to_save
     """
 
-    # if SVM, do a RandomizedSearchCV
+        # if SVM, do a RandomizedSearchCV
     if clf_model.__class__.__name__ == "SVC":
         #print randomized 
         print("Randomized search in progress...")
@@ -160,8 +160,8 @@ def perform_classification(
             return_train_score=True,
             n_iter=10,
         )
-    else:
         # Initialize GridSearchCV with the pipeline or model
+    else:
         grid_search = GridSearchCV(
             estimator=clf_model,
             param_grid=param_grid,
@@ -342,7 +342,7 @@ feature_selection_options = [
     "mrmr_ff",  # mrmr with forward feature selection
 ]
 
-penalty = ["pf"]  # nopf
+penalty = ["nopf"]  # TODO CHANGE
 # List to hold results of classifiers
 best_classifiers = []
 # Store all models and configurations

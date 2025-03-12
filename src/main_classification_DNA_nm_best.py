@@ -109,12 +109,19 @@ for root, dirs, files in os.walk(EXPERIMENT_PATH_RESULTS):
     for file in files:
         if file.endswith(".pkl"):
             with open(os.path.join(root, file), "rb") as f:
-                #print the name of the file
                 print(f"Reading file: {file}")
-                results = pickle.load(f)
-                all_scores.append((results["f1_score"], results["accuracy"]))
-                all_models.append(results["best_estimator"])
-                all_configs.append(results)
+                # try to read otherwise print the error
+                try:
+                    results = pickle.load(f)
+                    all_scores.append((results["f1_score"], results["accuracy"]))
+                    all_models.append(results["best_estimator"])
+                    all_configs.append(results)
+
+                except Exception as e:
+                    print("Error in reading file:", e)
+                    continue
+                # print the name of the file
+
 
 """
 Load the X_test_scaled_df and y_test from the saved path
@@ -164,7 +171,7 @@ for idx, (original_idx, (f1_training, accuracy_training)) in enumerate(
     sorted_scores_with_indices
 ):
     print(
-        f"{original_idx + 1}: F1-score = {f1_training:.3f}, Accuracy = {accuracy_training:.3f}"
+        f"{original_idx + 1}: F1-score = {f1_training:.3f}, Accuracy = {accuracy_training:.3f}, Model = {all_configs[original_idx]['model']}"
     )
 
 
@@ -179,6 +186,8 @@ best_model_results = all_configs[best_model_idx]
 
 # Print only the desired keys and their corresponding values
 keys_to_print = [
+    # name classifier
+    "model",
     "best_params",
     "best_estimator",
     "best_score",
@@ -250,6 +259,13 @@ names = selected_config["feature set"]
 print("Feature set:", names)
 print("Length of feature set:", len(names))
 
+#print confusion matrix of the test set
+print("Confusion Matrix of the test set:")
+print(conf_mat)
+print("Classification Report of the test set:")
+print(classification_report(y_test, y_pred, target_names=class_labels))
+
+
 # try importances otherwise print the error
 try:
     importances = selected_model.feature_importances_
@@ -264,6 +280,7 @@ try:
     )
 except Exception as e:
     print("Error in feature importance:", e)
+
 
 # print end of the script
 print("End of the script")

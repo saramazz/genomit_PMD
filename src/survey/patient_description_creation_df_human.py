@@ -26,11 +26,13 @@ GLOBAL_PATH = os.path.dirname(parent_path)
 
 saved_result_path = os.path.join(GLOBAL_PATH, "saved_results")
 SURVEY_PATH = os.path.join(saved_result_path, "survey")
-BEST_PATH = os.path.join(saved_result_path, "classifiers_results/best_model")
+#BEST_PATH = os.path.join(saved_result_path, "classifiers_results/best_model")
 
 
-df_path = os.path.join(saved_result_path, "df", "df_Global_preprocessed.csv")
-df_test_path = os.path.join(SURVEY_PATH, "df_test_best.csv")
+#df_path = os.path.join(saved_result_path, "df", "df_Global_preprocessed.csv")
+df_path=os.path.join(saved_result_path, "df", "df_symp.csv") 
+#df_test_path = os.path.join(SURVEY_PATH, "df_test_best.csv")
+df_test_path=  os.path.join(saved_result_path, "df", "df_symp.csv") 
 important_vars_path = os.path.join(
     GLOBAL_PATH, "variables_mapping", "important_variables_huma.xlsx"
 )
@@ -60,11 +62,23 @@ except FileNotFoundError:
 nRow, nCol = df_test.shape
 print(f"The DataFrame 'df_test' contains {nRow} rows and {nCol} columns.")
 
+
+
 """
 FILTER AND ANALYZE COLUMNS
 """
+#print the cols of the df_test
+print("Columns of the df_test:", df_test.columns)
+
+input = input("Do you want to filter the columns of the df_test? (y/n): ")
 # Filter `df_raw` by `subject_id_test` and display new shape
-subject_id_test = df_test["Subject id"].tolist()
+#subject_id_test = df_test["subjid"].tolist()
+
+# Filter `df_raw` by `subject_id_test` and display new shape
+subject_id_test = df_test[df_test["test"] == 1]["subjid"].values
+
+#print the len of the subject_id_test
+print(f"Number of subjects in test set: {len(subject_id_test)}")
 
 """
 CREATE TEST DATAFRAME WITH SELECTED FEATURES
@@ -103,12 +117,15 @@ columns_to_drop += additional_columns_to_drop
 """
 
 # load the selected features selected_features.txt
-selected_features_path = os.path.join(BEST_PATH, "selected_features.txt")
+'''
+selected_features_path= os.path.join(BEST_PATH, "selected_features.txt")
 with open(selected_features_path, "r") as file:
     selected_features = file.read().splitlines()
-    print("Selected features:", selected_features)
-
-# add subject id to the selected features
+    print("Selected features:", selected_features)'
+'''
+#TODO insert automatically them
+selected_features=['ear_voice_abn', 'genit_breast_abn', 'sex', 'card_abn', 'alcohol', 'internal_abn', 'eye_abn', 'ecgh', 'resp', 'hba1c', 'ear', 'lac', 'echo', 'ecg', 'oct', 'bmi', 'hmri', 'pcgntn', 'natal_growth_abn', 'smoking', 'symp_on_2', 'vsupp', 'eeg', 'symp_on_4', 'mhterm', 'pimgres', 'va', 'ck', 'aao', 'conn_skin_abn', 'oa', 'nerv_abn', 'emg', 'diges_abn', 'wml', 'symp_on_1', 'musc_sk_abn', 'symp_on_5', 'resp_abn', 'fhx', 'other_abn', 'hisc', 'pssev', 'mrisll', 'cc', 'gait_abn', 'bgc', 'fo', 'symp_on_3', 'le']
+# add subjid to the selected features
 selected_features.append("subjid")
 
 # Drop columns not in selected features
@@ -116,8 +133,8 @@ columns_to_drop = [col for col in df_raw.columns if col not in selected_features
 df = df_raw.drop(columns=columns_to_drop, errors="ignore")
 
 
-# Filter `df_raw` by `subject_id_test` and display new shape
-subject_id_test = df_test["Subject id"].tolist()
+
+#["subjid"].tolist()
 df_raw = df_raw[df_raw["subjid"].isin(subject_id_test)]
 print(f"Filtered df_raw dimensions: {df_raw.shape}")
 
@@ -507,5 +524,39 @@ df.to_csv(
     index=False,
 )
 
+'''
+df.to_csv(
+    #os.path.join(SURVEY_PATH, "df_test_human_friendly_best_179.csv"), #to create the survey from raw df
+    index=False,
+)
+'''
+
 # print that the df_test was saved
 print("df_test saved in csv as df_test_human_friendly_best.csv in the survey folder")
+#print the SURVEY_PATH
+print(SURVEY_PATH)
+
+#read the df_test_human_friendly_best_179 and df_test_human_friendly_best
+df_test_human_friendly_best_179 = pd.read_csv(os.path.join(SURVEY_PATH, "df_test_human_friendly_best_179.csv"))
+df_test_human_friendly_best = pd.read_csv(os.path.join(SURVEY_PATH, "df_test_human_friendly_best.csv"))
+
+#find the subjid that are in df_test_human_friendly_best_179 but not in df_test_human_friendly_best
+subjid_not_in_df_test_human_friendly_best = df_test_human_friendly_best_179[~df_test_human_friendly_best_179["id paziente"].isin(df_test_human_friendly_best["id paziente"])]
+print("subjid that are in df_test_human_friendly_best_179 but not in df_test_human_friendly_best")
+#for these partients, substitute No with -998
+subjid_not_in_df_test_human_friendly_best = subjid_not_in_df_test_human_friendly_best.fillna(-998)
+#add these subjid to the df_test_human_friendly_best
+df_test_human_friendly_best = pd.concat([df_test_human_friendly_best, subjid_not_in_df_test_human_friendly_best])
+#print the new df_test_human_friendly_best
+
+
+#correct sex column
+if "Sesso" in df_test_human_friendly_best.columns:
+    df_test_human_friendly_best["Sesso"] = df_test_human_friendly_best["Sesso"].replace({"1": "Femminile", "0": "Maschile"})
+
+print(df_test_human_friendly_best)
+#save the new df_test_human_friendly_best
+df_test_human_friendly_best.to_csv(
+    os.path.join(SURVEY_PATH, "df_test_human_friendly_best_complete179.csv"),
+    index=False,
+)

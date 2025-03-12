@@ -47,7 +47,7 @@ LOAD DATA
 """
 
 df_path = os.path.join(
-    SURVEY_PATH, "df_test_human_friendly_best.csv"
+    SURVEY_PATH, "df_test_human_friendly_best_complete179.csv"#"df_test_human_friendly_best.csv"
 )  # description of the patients in a human friendly way
 df = pd.read_csv(df_path)
 
