@@ -30,9 +30,9 @@ SURVEY_PATH = os.path.join(saved_result_path, "survey")
 
 
 #df_path = os.path.join(saved_result_path, "df", "df_Global_preprocessed.csv")
-df_path=os.path.join(saved_result_path, "df", "df_symp.csv") 
+df_path=os.path.join(saved_result_path, "df", "df_no_symp.csv") 
 #df_test_path = os.path.join(SURVEY_PATH, "df_test_best.csv")
-df_test_path=  os.path.join(saved_result_path, "df", "df_symp.csv") 
+df_test_path=  os.path.join(saved_result_path, "df", "df_no_symp.csv") 
 important_vars_path = os.path.join(
     GLOBAL_PATH, "variables_mapping", "important_variables_huma.xlsx"
 )
@@ -518,6 +518,7 @@ print(df)
 df = df.astype(object).replace(0, "No")
 
 print("0 substituted with No in df")
+
 # save in csv the resultin df_test
 df.to_csv(
     os.path.join(SURVEY_PATH, "df_test_human_friendly_best.csv"),
@@ -526,23 +527,24 @@ df.to_csv(
 
 '''
 df.to_csv(
-    #os.path.join(SURVEY_PATH, "df_test_human_friendly_best_179.csv"), #to create the survey from raw df
+    os.path.join(SURVEY_PATH, "df_test_human_friendly_best_140.csv"), #to create the survey from raw df
     index=False,
-)
+)'
 '''
+
 
 # print that the df_test was saved
 print("df_test saved in csv as df_test_human_friendly_best.csv in the survey folder")
 #print the SURVEY_PATH
 print(SURVEY_PATH)
 
-#read the df_test_human_friendly_best_179 and df_test_human_friendly_best
-df_test_human_friendly_best_179 = pd.read_csv(os.path.join(SURVEY_PATH, "df_test_human_friendly_best_179.csv"))
+#read the df_test_human_friendly_best_140 and df_test_human_friendly_best
+df_test_human_friendly_best_140 = pd.read_csv(os.path.join(SURVEY_PATH, "df_test_human_friendly_best_140.csv"))
 df_test_human_friendly_best = pd.read_csv(os.path.join(SURVEY_PATH, "df_test_human_friendly_best.csv"))
 
-#find the subjid that are in df_test_human_friendly_best_179 but not in df_test_human_friendly_best
-subjid_not_in_df_test_human_friendly_best = df_test_human_friendly_best_179[~df_test_human_friendly_best_179["id paziente"].isin(df_test_human_friendly_best["id paziente"])]
-print("subjid that are in df_test_human_friendly_best_179 but not in df_test_human_friendly_best")
+#find the subjid that are in df_test_human_friendly_best_140 but not in df_test_human_friendly_best
+subjid_not_in_df_test_human_friendly_best = df_test_human_friendly_best_140[~df_test_human_friendly_best_140["id paziente"].isin(df_test_human_friendly_best["id paziente"])]
+print("subjid that are in df_test_human_friendly_best_140 but not in df_test_human_friendly_best")
 #for these partients, substitute No with -998
 subjid_not_in_df_test_human_friendly_best = subjid_not_in_df_test_human_friendly_best.fillna(-998)
 #add these subjid to the df_test_human_friendly_best
@@ -557,6 +559,6 @@ if "Sesso" in df_test_human_friendly_best.columns:
 print(df_test_human_friendly_best)
 #save the new df_test_human_friendly_best
 df_test_human_friendly_best.to_csv(
-    os.path.join(SURVEY_PATH, "df_test_human_friendly_best_complete179.csv"),
+    os.path.join(SURVEY_PATH, "df_test_human_friendly_best_complete140.csv"),
     index=False,
 )
