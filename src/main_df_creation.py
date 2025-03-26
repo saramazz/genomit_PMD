@@ -266,7 +266,7 @@ plot_phenotype_distribution(df, "clindiag__decod", saved_result_path)
 process_datetime_column(df, "psstdat__c")
 process_datetime_column(df, "visdat")
 
-df = df[~df["gendna"].isin([2, 3])] # remove the patients with 2 or 3 in gendna
+df = df[~df["gendna"].isin([2, 3])]  # remove the patients with 2 or 3 in gendna
 df["gene"].replace("MTHFR", np.nan, inplace=True)
 df["gene"].replace("twincle", "TWNK", inplace=True)
 
@@ -351,9 +351,11 @@ patients_with_all_nan.to_csv(
 print("Checking if symp_on_1 has nan values...")
 print(df["symp_on_1"].isnull().sum())
 
-#ask if remove patients with all nan in top 5 symptoms
-answ=input("Do you want to remove patients with all nan in top 5 symptoms or mantain all? all to not remove or red to remove: ")
-if 'red' in answ:
+# ask if remove patients with all nan in top 5 symptoms
+answ = input(
+    "Do you want to remove patients with all nan in top 5 symptoms or mantain all? all to not remove or red to remove: "
+)
+if "red" in answ:
     # remove patients with nan in symp_on_1
     df = df[~df["symp_on_1"].isnull()]
     # remove the patients with all nan in top 5 symptoms
@@ -405,9 +407,7 @@ df = df.fillna(-998)
 # Check if there are any remaining missing values
 missing_count = df.isnull().sum().sum()
 if missing_count > 0:
-    print(
-        f"Warning: There are still {missing_count} missing values in the DataFrame."
-    )
+    print(f"Warning: There are still {missing_count} missing values in the DataFrame.")
 else:
     print("All missing values have been successfully filled.")
 
@@ -422,8 +422,8 @@ df_num = convert_to_numerical(df)
 # print the dimension of the df
 nRow, nCol = df_num.shape
 print(f"Numerical DataFrame dimensions: {nRow} rows, {nCol} columns")
-#Save the numerical DataFrame
-if answ == 'all':
+# Save the numerical DataFrame
+if answ == "all":
     df.to_pickle(saved_result_path + "/df_Global_preprocessed_all.pkl")
     df.to_csv(saved_result_path + "/df_Global_preprocessed_all.csv", index=False)
     df_num.to_pickle(os.path.join(saved_result_path, "df_num_Global_all.pkl"))

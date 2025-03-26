@@ -175,6 +175,68 @@ for idx, (original_idx, (f1_training, accuracy_training)) in enumerate(
     print(
         f"{original_idx + 1}: F1-score = {f1_training:.3f}, Accuracy = {accuracy_training:.3f}, Model = {all_configs[original_idx]['model']}"
     )
+    #print also 
+    keys_to_print = [
+    # name classifier
+    "model",
+    "best_params",
+    "best_score",
+    "feature set",
+    "features",
+    "sampling",
+    "model",
+    ]
+    print ("Model details: ")
+    for key in keys_to_print:
+        print(f"{key}: {all_configs[original_idx][key]}")
+    print("\n")
+
+# Assuming you have a list of models with their metrics and configurations 
+print("\nChoose the best model configuration for the test set:")
+
+# Define a list to keep track of suitable models with complexity considerations
+suitable_models = []
+
+for idx, (original_idx, (f1_training, accuracy_training)) in enumerate(sorted_scores_with_indices):
+    model_config = all_configs[original_idx]
+    
+    # Check complexity parameters and append suitable models
+    complexity_params = {
+        "num_trees": model_config.get("best_params", {}).get("n_estimators", 0),
+        "max_depth": model_config.get("best_params", {}).get("max_depth", 0),
+        "num_leaves": model_config.get("best_params", {}).get("num_leaves", 0),
+        "nodes": model_config.get("best_params", {}).get("layers", 0)  # for DL models
+    }
+    
+    print(f"{original_idx + 1}: F1-score = {f1_training:.3f}, Accuracy = {accuracy_training:.3f}, Model = {model_config['model']}")
+    
+    keys_to_print = [
+        "model",
+        "best_params",
+        "best_score",
+        "feature set",
+        "features",
+        "sampling"
+    ]
+    
+    # Complexity check: prefer models with fewer trees and lower depth
+    if (complexity_params["num_trees"] < 30 and complexity_params["max_depth"] < 5):
+        suitable_models.append((original_idx, f1_training, accuracy_training, model_config))
+
+# If multiple suitable models exist, choose the best one based on F1-score or Accuracy
+if suitable_models:
+    best_model = max(suitable_models, key=lambda x: x[1])  # Select the model with the highest F1-score
+    print(f"\nSuitable Selected Model: {all_configs[best_model[0]]['model']} with F1-score: {best_model[1]:.3f} and Accuracy: {best_model[2]:.3f}")
+else:
+    print("No suitable models found based on the defined complexity criteria.")
+
+#apply the best model to the test set
+#TODO apply the suitable/
+
+
+"""
+PRINT DETAILED INFO
+"""
 
 
 # Find the best model index using the max F1 score and max accuracy
@@ -285,7 +347,7 @@ except Exception as e:
 
 
 # Find the best model index using the max F1 score and max accuracy
-best_model_idx = 422#153 rid # sorted_scores_with_indices[1][0] #second
+best_model_idx = 153#422#153 rid # sorted_scores_with_indices[1][0] #second
 
 # Print the index of the best model (zero-based)
 print(f"Best model index: {best_model_idx}")
@@ -391,7 +453,7 @@ except Exception as e:
     print("Error in feature importance:", e)
 
 # Find the best model index using the max F1 score and max accuracy
-best_model_idx = 161# Rd204  # sorted_scores_with_indices[1][0] #second
+best_model_idx = 204#161# Rd204  # sorted_scores_with_indices[1][0] #second
 
 # Print the index of the best model (zero-based)
 print(f"Best model index: {best_model_idx}")
