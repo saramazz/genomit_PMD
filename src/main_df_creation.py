@@ -203,7 +203,7 @@ for hospital_name in hospital_names:
     df = pd.read_pickle(pickle_file_path)
     print(f"Total unique 'subjid' in {hospital_name}: {df['subjid'].nunique()}")
     nRow, nCol = df.shape
-    print(f"DataFrame dimensions for {hospital_name}: {nRow} rows, {nCol} columns")
+    #print(f"DataFrame dimensions for {hospital_name}: {nRow} rows, {nCol} columns")
 
 print("Loading and previewing global DataFrame...")
 pickle_file_path = os.path.join(saved_result_path, "df_Global_raw.pkl")
@@ -213,6 +213,7 @@ print(f"Global DataFrame dimensions: {nRow} rows, {nCol} columns")
 print("Preview of df Global: ")
 print(df.head())
 
+input("Press Enter to proceed with the script...")
 
 print("Starting general preprocessing steps...")
 
