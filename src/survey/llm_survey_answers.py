@@ -141,6 +141,8 @@ def analyze_row(row, model, max_tokens, temperature):
         )
 
 
+
+
 # Setup logging for info and errors
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
