@@ -1,10 +1,10 @@
-'''
+"""
 Script to evaluate the performance of different LLMs on a survey dataset
 by comparing their predictions against a gold standard.
 Plots confusion matrices and saves performance metrics to a CSV file.
 Plots confidence score distributions by true class labels for each model.
 
-'''
+"""
 
 # Standard libraries
 import os
@@ -24,6 +24,7 @@ from sklearn.metrics import (
     recall_score,
     f1_score,
     confusion_matrix,
+    classification_report,
 )
 
 
@@ -49,13 +50,12 @@ CLINDIAG_MAPPING = {
     "C17": "Other MMSD",
     "C18": "Encephalomyopathy",
     "C19": "Encephalopathy",
-    "C":   "MMSD",
+    "C": "MMSD",
     "D01": "Cardiomyopathy",
     "D05": "Other MOD",
-    "E":   "Unspecified MD",
-    "F":   "Asymptomatic"
+    "E": "Unspecified MD",
+    "F": "Asymptomatic",
 }
-
 
 
 def classify_confusion(true_label, pred_label):
@@ -69,6 +69,7 @@ def classify_confusion(true_label, pred_label):
         return "FN"
     else:
         return "Unknown"
+
 
 def analyze_misclassifications(
     merged_df: pd.DataFrame,
@@ -89,7 +90,7 @@ def analyze_misclassifications(
         clinical_df[["subjid", "clindiag__decod"]],
         left_on="ID",
         right_on="subjid",
-        how="left"
+        how="left",
     )
 
     # Map clinical diagnosis codes to descriptions
@@ -102,10 +103,12 @@ def analyze_misclassifications(
     fn_df = merged_df[merged_df["confusion_label"] == "FN"]
 
     # Calculate percentages for each clinical diagnosis category
-    fp_percent = (fp_df["clindiag__decod"].value_counts(normalize=True) * 100).sort_index()
-    fn_percent = (fn_df["clindiag__decod"].value_counts(normalize=True) * 100).sort_index()
-
-
+    fp_percent = (
+        fp_df["clindiag__decod"].value_counts(normalize=True) * 100
+    ).sort_index()
+    fn_percent = (
+        fn_df["clindiag__decod"].value_counts(normalize=True) * 100
+    ).sort_index()
 
     # Plot FP and FN distributions side-by-side
     plt.figure(figsize=(20, 10))
@@ -141,7 +144,9 @@ def analyze_misclassifications(
         plt.tight_layout()
         fpfn_dir = os.path.join(output_dir, "FP_FN")
         os.makedirs(fpfn_dir, exist_ok=True)
-        plt.savefig(os.path.join(fpfn_dir, f"fp_fn_distribution_{model_name}.png"), dpi=300)
+        plt.savefig(
+            os.path.join(fpfn_dir, f"fp_fn_distribution_{model_name}.png"), dpi=300
+        )
         plt.close()
         print(f"Saved FP/FN plot for model {model_name}")
 
@@ -152,29 +157,41 @@ def plot_confusion_matrix(y_true, y_pred, model_name, output_dir):
     os.makedirs(cm_dir, exist_ok=True)
 
     cm = confusion_matrix(y_true, y_pred)
-    plt.figure(figsize=(6, 4))
+    plt.figure(figsize=(5, 4))
+
+    # Heatmap with larger annotation font
     sns.heatmap(
         cm,
         annot=True,
         fmt="d",
         cmap="Blues",
-        xticklabels=["0", "1"],
-        yticklabels=["0", "1"],
+        xticklabels=["nDNA", "mtDNA"],
+        yticklabels=["nDNA", "mtDNA"],
+        annot_kws={"size": 14},  # <--- Increase annotation font size
     )
-    plt.title(f"Confusion Matrix: {model_name}")
-    plt.xlabel("Predicted")
-    plt.ylabel("Actual")
-    plt.tight_layout()
 
+    # Increase tick label fonts
+    plt.xticks(fontsize=12)
+    plt.yticks(fontsize=12)
+
+    # Increase title and axis label fonts
+    plt.title(f"Confusion Matrix: {model_name}", fontsize=14)
+    plt.xlabel("Predicted", fontsize=12)
+    plt.ylabel("Actual", fontsize=12)
+
+    plt.tight_layout()
     plt.savefig(os.path.join(cm_dir, f"confusion_matrix_{model_name}.png"))
     plt.close()
 
-def plot_confidence_distribution_by_class_side_by_side(df, true_label_col, pred_label_col, confidence_score_col, model_name, output_dir):
+
+def plot_confidence_distribution_by_class_side_by_side(
+    df, true_label_col, pred_label_col, confidence_score_col, model_name, output_dir
+):
     """
     Plot KDE distributions of confidence scores side by side:
     - Left: by true class labels
     - Right: by predicted class labels
-    
+
     Parameters:
         df (pd.DataFrame): DataFrame containing true labels, predicted labels, and confidence scores.
         true_label_col (str): Column name for true class labels.
@@ -206,13 +223,15 @@ def plot_confidence_distribution_by_class_side_by_side(df, true_label_col, pred_
             color=colors[cls],
         )
         mean_val = df[df[true_label_col] == cls][confidence_score_col].mean()
-        plt.axvline(mean_val, color=colors[cls], linestyle='--', linewidth=1.5)
-    plt.title(f"Confidence Distribution by TRUE Label\nModel: {model_name}", fontsize=14)
+        plt.axvline(mean_val, color=colors[cls], linestyle="--", linewidth=1.5)
+    plt.title(
+        f"Confidence Distribution by TRUE Label\nModel: {model_name}", fontsize=14
+    )
     plt.xlabel("Confidence Score")
     plt.ylabel("Density")
     plt.xlim(0, 1)
     plt.legend()
-    plt.grid(True, linestyle='--', alpha=0.3)
+    plt.grid(True, linestyle="--", alpha=0.3)
 
     # Plot KDE by PREDICTED labels (right)
     plt.subplot(1, 2, 2)
@@ -227,20 +246,67 @@ def plot_confidence_distribution_by_class_side_by_side(df, true_label_col, pred_
             color=colors[cls],
         )
         mean_val = df[df[pred_label_col] == cls][confidence_score_col].mean()
-        plt.axvline(mean_val, color=colors[cls], linestyle='--', linewidth=1.5)
-    plt.title(f"Confidence Distribution by PREDICTED Label\nModel: {model_name}", fontsize=14)
+        plt.axvline(mean_val, color=colors[cls], linestyle="--", linewidth=1.5)
+    plt.title(
+        f"Confidence Distribution by PREDICTED Label\nModel: {model_name}", fontsize=14
+    )
     plt.xlabel("Confidence Score")
     plt.ylabel("Density")
     plt.xlim(0, 1)
     plt.legend()
-    plt.grid(True, linestyle='--', alpha=0.3)
+    plt.grid(True, linestyle="--", alpha=0.3)
 
     plt.tight_layout()
 
-    save_path = os.path.join(score_dir, f"score_distribution_true_vs_pred_{model_name}.png")
+    save_path = os.path.join(
+        score_dir, f"score_distribution_true_vs_pred_{model_name}.png"
+    )
     plt.savefig(save_path, dpi=300)
     plt.close()
     print(f"Plot saved to {save_path}")
+
+
+def compute_classification_metrics(y_true, y_pred, model_name, output_dir):
+    """
+    Computes precision, recall, and F1-score for each class and weighted average.
+    Saves results to CSV.
+    """
+    report = classification_report(
+        y_true, y_pred, output_dict=True, target_names=["nDNA", "mtDNA"]
+    )
+
+    # Format results into a DataFrame
+    df_metrics = pd.DataFrame(
+        {
+            "Class": ["mtDNA", "nDNA", "Weighted avg."],
+            "Precision": [
+                report["mtDNA"]["precision"],
+                report["nDNA"]["precision"],
+                report["weighted avg"]["precision"],
+            ],
+            "Recall": [
+                report["mtDNA"]["recall"],
+                report["nDNA"]["recall"],
+                report["weighted avg"]["recall"],
+            ],
+            "F1-score": [
+                report["mtDNA"]["f1-score"],
+                report["nDNA"]["f1-score"],
+                report["weighted avg"]["f1-score"],
+            ],
+        }
+    )
+
+    # Ensure output directory exists
+    metrics_dir = os.path.join(output_dir, "metrics")
+    os.makedirs(metrics_dir, exist_ok=True)
+
+    # Save to CSV
+    csv_path = os.path.join(metrics_dir, f"classification_metrics_{model_name}.csv")
+    df_metrics.to_csv(csv_path, index=False)
+    print(f"Classification report saved to {csv_path}")
+
+    return df_metrics
 
 
 # Base directory for results
@@ -251,10 +317,19 @@ file_paths = {
     "gpt-4o": base_dir / "survey" / "survey_answer_gpt-4o.csv",
     "gpt-4o-mini": base_dir / "survey" / "survey_answer_gpt-4o-mini.csv",
     "gpt-3.5-turbo": base_dir / "survey" / "survey_answer_gpt-3.5-turbo.csv",
-    "sauerkrautlm-gemma-2-9b-it-i1": base_dir / "survey" / "survey_answer_sauerkrautlm-gemma-2-9b-it-i1.csv",
-    "phi-4-mini-reasoning": base_dir / "survey" / "survey_answer_phi-4-mini-reasoning.csv",
-    "deepseek-r1-distill-qwen-7b": base_dir / "survey" / "survey_answer_deepseek-r1-distill-qwen-7b.csv",
+    "sauerkrautlm-gemma-2-9b-it-i1": base_dir
+    / "survey"
+    / "survey_answer_sauerkrautlm-gemma-2-9b-it-i1.csv",
+    "phi-4-mini-reasoning": base_dir
+    / "survey"
+    / "survey_answer_phi-4-mini-reasoning.csv",
+    "deepseek-r1-distill-qwen-7b": base_dir
+    / "survey"
+    / "survey_answer_deepseek-r1-distill-qwen-7b.csv",
     "gold": base_dir / "df" / "df_symp.csv",
+    "qwen2.5-7b-instruct": base_dir
+    / "survey"
+    / "survey_answer_qwen2.5-7b-instruct.csv",
 }
 
 # Output directory for saving results
@@ -271,9 +346,10 @@ selected_models = {
     "gpt-4o": file_paths["gpt-4o"],
     "gpt-4o-mini": file_paths["gpt-4o-mini"],
     "gpt-3.5-turbo": file_paths["gpt-3.5-turbo"],
-    # "sauerkrautlm-gemma-2-9b-it-i1": file_paths["sauerkrautlm-gemma-2-9b-it-i1"],
-    # "phi-4-mini-reasoning": file_paths["phi-4-mini-reasoning"],
-    # "deepseek-r1-distill-qwen-7b": file_paths["deepseek-r1-distill-qwen-7b"],
+    "sauerkrautlm-gemma-2-9b-it-i1": file_paths["sauerkrautlm-gemma-2-9b-it-i1"],
+    "phi-4-mini-reasoning": file_paths["phi-4-mini-reasoning"],
+    "deepseek-r1-distill-qwen-7b": file_paths["deepseek-r1-distill-qwen-7b"],
+    "qwen2.5-7b-instruct": file_paths["qwen2.5-7b-instruct"],
 }
 
 # Initialize a list to collect metrics for all models
@@ -282,11 +358,13 @@ metrics_list = []
 # Iterate over each model
 for model_name, model_path in selected_models.items():
     print(f"Evaluating model: {model_name}")
-    print (f"Model path: {model_path}")
+    print(f"Model path: {model_path}")
     # Load model predictions
     model_df = pd.read_csv(model_path)
+    # print dimensions of the model
+    print(f"Model DataFrame shape: {model_df.shape}")
 
-    #remove rows with NaN values in 'mutation' column
+    # remove rows with NaN values in 'mutation' column
     model_df = model_df.dropna(subset=["mutation"])
 
     # Merge with gold standard
@@ -323,21 +401,26 @@ for model_name, model_path in selected_models.items():
     plot_confusion_matrix(y_true, y_pred, model_name, output_dir)
     print(f"Confusion matrix plot saved for {model_name}")
 
+    compute_classification_metrics(y_true, y_pred, model_name, output_dir)
+
     try:
         plot_confidence_distribution_by_class_side_by_side(
-        df=merged_df,
-        true_label_col="gendna_type",
-        pred_label_col="mutation",
-        confidence_score_col="score",
-        model_name=model_name,
-        output_dir=output_dir,
+            df=merged_df,
+            true_label_col="gendna_type",
+            pred_label_col="mutation",
+            confidence_score_col="score",
+            model_name=model_name,
+            output_dir=output_dir,
         )
     except IndexError as e:
-        print(f"Skipping confidence distribution plot for {model_name} due to IndexError: {e}")
-
+        print(
+            f"Skipping confidence distribution plot for {model_name} due to IndexError: {e}"
+        )
 
         # Analyze misclassifications
-    clinical_diag_path = "/home/saram/PhD/genomit_PMD/saved_results/df/df_Global_preprocessed.csv"
+    clinical_diag_path = (
+        "/home/saram/PhD/genomit_PMD/saved_results/df/df_Global_preprocessed.csv"
+    )
     analyze_misclassifications(
         merged_df=merged_df,
         output_dir=output_dir,
@@ -356,5 +439,3 @@ metrics_df.to_csv(os.path.join(output_dir, "performance_comparison.csv"), index=
 print("Performance evaluation completed. Results saved to the specified directory.")
 # Print the final metrics DataFrame
 print(metrics_df)
-
-

@@ -18,18 +18,17 @@ from requests.packages.urllib3.util.retry import Retry
 
 
 # Configuration
-base_url = "http://10.7.11.166:1234"
+base_url = "http://192.168.2.5:1234"  # "http://10.7.11.166:1234"
 
 # --------------------
 # Set model name
 # --------------------
-
-model = "phi-4-mini-reasoning"  # Example: "deepseek-r1-distill-qwen-7b"
+model = "phi-4-mini-reasoning"
 # model = "deepseek-r1-distill-qwen-7b"
-# model = "sauerkrautlm-gemma-2-9b-it-i1"
-# model = "qwen2.5-7b-instruct"
-# model = "wasamikirua-samantha2.0-qwen2.5-14b-ita"
-max_tokens = 2000
+# model = "sauerkrautlm-gemma-2-9b-it-i1" #COMPLETE
+# model = "qwen2.5-7b-instruct" #COMPLETE
+
+max_tokens = 1000
 temperature = 0.2
 
 # File paths
@@ -128,7 +127,7 @@ def call_api(description, model, max_tokens=2000, temperature=0.2):
     }
 
     try:
-        response = session.post(url, headers=headers, json=payload, timeout=60)
+        response = session.post(url, headers=headers, json=payload, timeout=500)
         response.raise_for_status()
         content = response.json()["choices"][0]["message"]["content"]
         dna_class, confidence = extract_class_and_confidence(content)
@@ -136,24 +135,6 @@ def call_api(description, model, max_tokens=2000, temperature=0.2):
     except Exception as e:
         logger.error(f"API call failed: {e}")
         return np.nan, np.nan, ""
-
-
-"""
-# Send prompt to loiption, model, max_tokens=2000, temperature=0.2):
-    url = f"{base_url}/v1/chat/completions"
-    headers = {"Content-Type": "application/json"}
-    
-
-    try:
-        response = requests.post(url, headers=headers, json=payload, timeout=60)
-        response.raise_for_status()
-        content = response.json()["choices"][0]["message"]["content"]
-        dna_class, confidence = extract_class_and_confidence(content)
-        return dna_class, confidence, content
-    except Exception as e:
-        logger.error(f"API call failed: {e}")
-        return np.nan, np.nan, ""
-        """
 
 
 # Append result to output CSV safely
@@ -180,7 +161,9 @@ def analyze_row(row, model, max_tokens, temperature):
         "reasoning": full_response,
     }
 
-    logger.info(f"Processed ID {row['ID']}: {result_row}")
+    logger.info(
+        f"Processed ID {row['ID']}: {result_row['ID']} - result: {result_row['mutation']} with score {result_row['score']}"
+    )
     append_result(result_row)
 
     with counter_lock:
@@ -196,20 +179,55 @@ if __name__ == "__main__":
     data = pd.read_csv(file_path)
 
     # decrease for testing
-    data = data.head(4)  # For testing purposes, limit to 10
+    # data = data.head(2)  # For testing purposes, limit to 10
 
     total_patients = len(data)
     logger.info(f"Total patients to process: {total_patients}")
 
+    # model
+    logger.info(f"Using model: {model}")
+
     # Skip already processed patients
     if os.path.exists(saving_path) and os.path.getsize(saving_path) > 0:
-        processed_ids = pd.read_csv(saving_path)["ID"]
+        df_partial = pd.read_csv(saving_path)
+
+        # Identify rows where all columns except "ID" are NaN
+        empty_rows_mask = df_partial.drop(columns=["ID"]).isnull().all(axis=1)
+        num_empty_rows = empty_rows_mask.sum()
+
+        if num_empty_rows > 0:
+            # print dimensions of df_partial before cleaning
+            logger.info(f"Dimensions of df_partial before cleaning: {df_partial.shape}")
+            logger.warning(
+                f"Found {num_empty_rows} rows with all NaN values (except ID) in {saving_path}. Removing them."
+            )
+            df_partial = df_partial[~empty_rows_mask]
+            # Overwrite the CSV file without the empty rows
+            df_partial.to_csv(saving_path, index=False)
+            logger.info(f"Updated {saving_path} after removing empty rows.")
+            # print dimensions of df_partial
+            logger.info(f"Dimensions of df_partial after cleaning: {df_partial.shape}")
+        else:
+            logger.info("No empty rows (except ID) found in partial results.")
+
+        # Extract IDs of successfully processed patients
+        processed_ids = df_partial["ID"].tolist()
+
+        # Remove already processed patients from the input data
         data = data[~data["ID"].isin(processed_ids)]
+
         processed_counter = len(processed_ids)
+        logger.info(
+            f"Skipping {len(processed_ids)} already processed patients. Remaining: {len(data)}"
+        )
+        # input("Press Enter to continue with the remaining patients...")
     else:
         processed_counter = 0
         pd.DataFrame(columns=["ID", "mutation", "score", "reasoning"]).to_csv(
             saving_path, index=False
+        )
+        logger.info(
+            f"No previous results found. Starting fresh with {len(data)} patients."
         )
 
     # Start timing
