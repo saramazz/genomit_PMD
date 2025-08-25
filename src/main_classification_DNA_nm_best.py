@@ -94,6 +94,8 @@ def setup_output(current_datetime):
     # print the results are saved in the file
     print(f"Results are saved in the file: {file_name}")
     sys.stdout = open(os.path.join(EXPERIMENT_PATH, file_name), "w")
+    #print the path of the experiment
+    print(f"Experiment path: {EXPERIMENT_PATH}")
 
 
 """
