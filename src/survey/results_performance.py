@@ -4,6 +4,19 @@ import pandas as pd
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 import matplotlib.pyplot as plt
 
+import os
+import matplotlib.pyplot as plt
+from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
+import matplotlib.cm as cm
+import numpy as np
+
+# --- Create folders if they do not exist ---
+hist_folder = "/home/saram/PhD/genomit_PMD/saved_results/survey/survey_answers/hist"
+cm_folder = "/home/saram/PhD/genomit_PMD/saved_results/survey/survey_answers/CM"
+os.makedirs(hist_folder, exist_ok=True)
+os.makedirs(cm_folder, exist_ok=True)
+
+
 # --- Paths ---
 input_file = "/home/saram/PhD/genomit_PMD/saved_results/survey/survey_answers/results_summary_all_files_with_registry.json"
 output_file = "/home/saram/PhD/genomit_PMD/saved_results/survey/survey_answers/patient_level_results.csv"
@@ -112,17 +125,7 @@ with open(metrics_file, "w") as f:
 
 print(f"Saved metrics to {metrics_file}")
 
-import os
-import matplotlib.pyplot as plt
-from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
-import matplotlib.cm as cm
-import numpy as np
 
-# --- Create folders if they do not exist ---
-hist_folder = "/home/saram/PhD/genomit_PMD/saved_results/survey/survey_answers/hist"
-cm_folder = "/home/saram/PhD/genomit_PMD/saved_results/survey/survey_answers/CM"
-os.makedirs(hist_folder, exist_ok=True)
-os.makedirs(cm_folder, exist_ok=True)
 
 # --- Function to plot bar chart ---
 def plot_bar(metrics_dict, metric_name="accuracy", save_path=None):
