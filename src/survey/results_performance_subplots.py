@@ -17,6 +17,8 @@ from sklearn.metrics import (
     ConfusionMatrixDisplay
 )
 
+from sklearn.metrics import roc_auc_score
+
 # --- Plotting ---
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
@@ -119,6 +121,22 @@ def compute_full_metrics(y_true, y_pred):
         "specificity": specificity,
         "f1": f1
     }
+# --- Function to compute metrics with AUC ---
+def compute_auc_metrics(y_true, y_pred):
+    cm = confusion_matrix(y_true, y_pred, labels=[0, 1])
+    tn, fp, fn, tp = cm.ravel()
+    specificity = tn / (tn + fp) if (tn + fp) > 0 else 0
+    sensitivity = tp / (tp + fn) if (tp + fn) > 0 else 0
+    try:
+        auc = roc_auc_score(y_true, y_pred)
+    except ValueError:
+        auc = 0.0
+    return {
+        "auc": auc,
+        "sensitivity": sensitivity,
+        "specificity": specificity
+    }
+
 
 hist_folder = "/home/saram/PhD/genomit_PMD/saved_results/survey/survey_answers/hist"
 cm_folder = "/home/saram/PhD/genomit_PMD/saved_results/survey/survey_answers/CM"
@@ -333,3 +351,193 @@ panels = [
 ]
 
 plot_grouped_panels(metrics_full, panels, os.path.join(hist_folder, "panel_ABC.svg"))
+
+
+
+### AUC Plots ###
+# --- Recompute metrics_full with new function ---
+metrics_full = {}
+for group in [
+    "ML", "LLM", "avg_clinician_prediction", "avg_expert_prediction",
+    "avg_nonexpert_prediction", "avg_adult_prediction", "avg_pediatric_prediction",
+    "adult_on_adult", "adult_on_pediatric",
+    "pediatric_on_pediatric", "pediatric_on_adult"
+]:
+    if group == "ML":
+        y_pred = results_df["ml_prediction"]
+        y_true = results_df["gold_label"]
+    elif group == "LLM":
+        y_pred = results_df["LLM_prediction"]
+        y_true = results_df["gold_label"]
+    elif group in results_df.columns:
+        y_pred = results_df[group].dropna()
+        y_true = results_df.loc[y_pred.index, "gold_label"]
+    else:
+        continue
+
+    y_pred = y_pred.astype(int)
+    y_true = y_true.astype(int)
+    metrics_full[group] = compute_auc_metrics(y_true, y_pred)
+
+# --- Subgroups ---
+metrics_full["ML_adult"] = compute_auc_metrics(adult_df["gold_label"], adult_df["ml_prediction"])
+metrics_full["LLM_adult"] = compute_auc_metrics(adult_df["gold_label"], adult_df["LLM_prediction"])
+metrics_full["ML_pediatric"] = compute_auc_metrics(ped_df["gold_label"], ped_df["ml_prediction"])
+metrics_full["LLM_pediatric"] = compute_auc_metrics(ped_df["gold_label"], ped_df["LLM_prediction"])
+
+# --- Update plotting functions ---
+def plot_grouped_bar(metrics_dict, groups, title, save_path):
+    metric_names = ["auc", "sensitivity", "specificity"]
+    x = np.arange(len(groups))
+    width = 0.22
+
+    plt.figure(figsize=(20, 6))
+    colors = cm.Blues(np.linspace(0.4, 0.9, len(metric_names)))
+
+    for i, metric in enumerate(metric_names):
+        values = [metrics_dict[g][metric] for g in groups if g in metrics_dict]
+        bars = plt.bar(
+            x + i * width, values, width,
+            label=metric.capitalize(),
+            color=colors[i]
+        )
+        for bar in bars:
+            height = bar.get_height()
+            plt.text(
+                bar.get_x() + bar.get_width() / 2,
+                height + 0.01,
+                f"{height:.2f}",
+                ha="center", va="bottom",
+                fontsize=9, fontweight="bold"
+            )
+
+    plt.xticks(x + width, groups, rotation=30, ha="right")
+    plt.ylabel("Score")
+    plt.ylim(0, 1.05)
+    plt.title(title)
+    plt.grid(axis="y", linestyle="--", alpha=0.6)
+    plt.legend(title="Metric", loc="center left", bbox_to_anchor=(1.02, 0.5))
+    plt.tight_layout(rect=[0, 0, 0.98, 1])
+    plt.savefig(save_path, format="svg")
+    plt.close()
+
+def plot_grouped_panels(metrics_dict, panels, save_path):
+    metric_names = ["auc", "sensitivity", "specificity"]
+    max_groups = max(len(groups) for _, groups in panels)
+    width = 0.22
+
+    fig, axes = plt.subplots(len(panels), 1, figsize=(22, 16), sharey=True)
+    colors = cm.Blues(np.linspace(0.4, 0.9, len(metric_names)))
+
+    for ax, (title, groups) in zip(axes, panels):
+        x = np.arange(max_groups)
+        for i, metric in enumerate(metric_names):
+            values = [metrics_dict[g][metric] if g in metrics_dict else 0 for g in groups]
+            values += [0] * (max_groups - len(groups))
+
+            bars = ax.bar(x + i * width, values, width,
+                          label=metric.capitalize(), color=colors[i])
+            for j, (bar, val) in enumerate(zip(bars, values)):
+                if j < len(groups) and val > 0:
+                    ax.text(bar.get_x() + bar.get_width() / 2,
+                            bar.get_height() + 0.01,
+                            f"{val:.2f}",
+                            ha="center", va="bottom",
+                            fontsize=8, fontweight="bold")
+
+        labels = groups + [""] * (max_groups - len(groups))
+        ax.set_xticks(x + width)
+        ax.set_xticklabels(labels, rotation=30, ha="right")
+        ax.set_ylim(0, 1.05)
+        ax.set_title(title, fontsize=12, fontweight="bold")
+        ax.grid(axis="y", linestyle="--", alpha=0.6)
+        ax.set_ylabel("Score")
+
+    handles, labels = axes[0].get_legend_handles_labels()
+    legend = fig.legend(handles, labels, title="Metric",
+                        loc="center left", bbox_to_anchor=(0.8, 0.5),
+                        borderaxespad=0)
+
+    fig.subplots_adjust(right=0.78, hspace=0.5, bottom=0.15)
+    fig.savefig(save_path, format="svg", bbox_extra_artists=(legend,), bbox_inches='tight')
+    plt.close()
+
+
+# --- Panel A: All patients ---
+groups_A = [
+    "ML", "LLM", "avg_clinician_prediction",
+    "avg_adult_prediction", "avg_pediatric_prediction",
+    "avg_expert_prediction", "avg_nonexpert_prediction"
+]
+plot_grouped_bar(metrics_full, groups_A, "Panel A: All patients",
+                 os.path.join(hist_folder, "panel_A_auc.svg"))
+
+# --- Panel B: Adult patients only ---
+groups_B = ["ML_adult", "LLM_adult", "adult_on_adult", "pediatric_on_adult"]
+plot_grouped_bar(metrics_full, groups_B, "Panel B: Adult patients",
+                 os.path.join(hist_folder, "panel_B_auc.svg"))
+
+# --- Panel C: Pediatric patients only ---
+groups_C = ["ML_pediatric", "LLM_pediatric", "adult_on_pediatric", "pediatric_on_pediatric"]
+plot_grouped_bar(metrics_full, groups_C, "Panel C: Pediatric patients",
+                 os.path.join(hist_folder, "panel_C_auc.svg"))
+
+# --- Example usage ---
+panels = [
+    ("All patients", [
+        "ML", "LLM", "avg_clinician_prediction",
+        "avg_adult_prediction", "avg_pediatric_prediction",
+        "avg_expert_prediction", "avg_nonexpert_prediction"
+    ]),
+    ("Adult patients", [
+        "ML_adult", "LLM_adult", "adult_on_adult", "pediatric_on_adult"
+    ]),
+    ("Pediatric patients", [
+        "ML_pediatric", "LLM_pediatric", "pediatric_on_pediatric", "adult_on_pediatric"
+    ])
+]
+
+plot_grouped_panels(metrics_full, panels, os.path.join(hist_folder, "panel_ABC_auc.svg"))
+
+from sklearn.metrics import precision_recall_fscore_support
+
+def compute_class_metrics(y_true, y_pred, labels=["mtDNA", "nDNA"]):
+    """
+    Calcola precision, recall e F1 per ciascuna classe e per la media pesata.
+    """
+    metrics = {}
+    precision, recall, f1, support = precision_recall_fscore_support(
+        y_true, y_pred, labels=labels, average=None
+    )
+
+    for i, label in enumerate(labels):
+        metrics[label] = {
+            "precision": round(precision[i], 2),
+            "recall": round(recall[i], 2),
+            "f1": round(f1[i], 2),
+            "support": support[i]
+        }
+
+    # Weighted average
+    precision_w, recall_w, f1_w, _ = precision_recall_fscore_support(
+        y_true, y_pred, labels=labels, average="weighted"
+    )
+    metrics["weighted"] = {
+        "precision": round(precision_w, 2),
+        "recall": round(recall_w, 2),
+        "f1": round(f1_w, 2)
+    }
+
+    return metrics
+
+#use the function to compute metrics for clinicians overall
+overall_metrics = compute_class_metrics(df["gold_label"], df["answer_clinician"])
+
+print("Overall Clinician Metrics:")
+print(overall_metrics)
+
+#print the overall_metrics
+#save the overall_metrics to a json file
+with open(metrics_file, "w") as f:
+    json.dump(overall_metrics, f, indent=2)
+# --- Update plotting functions for AUC metrics ---
