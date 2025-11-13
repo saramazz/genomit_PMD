@@ -1,0 +1,70 @@
+import pandas as pd
+import os
+import glob
+
+# --- Paths ---
+survey_folder = "/home/saram/PhD/genomit_PMD/saved_results/survey/survey_answers"
+matrix_path = "/home/saram/PhD/genomit_PMD/saved_results/survey/survey_patient_responder_matrix.xlsx"
+ml_path = "/home/saram/PhD/genomit_PMD/saved_results/classifiers_results/experiments_all_models_red/df_test_best_fp_fn.csv"
+output_csv = "/home/saram/PhD/genomit_PMD/saved_results/survey/survey_patient_responder_matrix_all_models.csv"
+
+# --- Load ML predictions from CSV ---
+ml_df = pd.read_csv(ml_path)
+print(f"ML predictions shape: {ml_df.shape}")
+
+# Deduplicate ML predictions by patient (keep most frequent if duplicates)
+ml_df = (
+    ml_df.groupby("Subject id")
+    .agg(lambda x: x.mode().iat[0] if not x.mode().empty else x.iloc[0])
+    .reset_index()
+)
+ml_df = ml_df.rename(columns={"Subject id": "Patient ID dataset", "predictions": "ML_best"})
+print(f"ML predictions after deduplication: {ml_df.shape}")
+#substitute 0/1 with nDNA/mtDNA
+ml_df["ML_best"] = ml_df["ML_best"].map({0: "nDNA", 1: "mtDNA"})
+print(f"Unique Patient IDs in ML predictions: {ml_df['Patient ID dataset'].nunique()}")
+
+# --- Load Excel matrix ---
+matrix_df = pd.read_excel(matrix_path)
+print(f"Excel matrix shape: {matrix_df.shape}")
+print(f"Unique Patient IDs in matrix: {matrix_df['Patient ID dataset'].nunique()}")
+
+#check common patients between matrix and ml_df
+common_patients = set(matrix_df["Patient ID dataset"]).intersection(set(ml_df["Patient ID dataset"]))
+print(f"Common patients between matrix and ML predictions: {len(common_patients)}")
+
+# --- Add ML_best from CSV ---
+ml_mapping = dict(zip(ml_df["Patient ID dataset"], ml_df["ML_best"]))
+matrix_df["ML_best"] = matrix_df["Patient ID dataset"].map(ml_mapping)
+print(f"Added column ML_best, NaNs: {matrix_df['ML_best'].isna().sum()}")
+
+# --- Load all LLM CSVs and add predictions directly ---
+survey_folder_llm= "/home/saram/PhD/genomit_PMD/saved_results/survey"
+csv_files = glob.glob(os.path.join(survey_folder_llm, "survey_answer_*.csv"))
+print(f"\nFound {len(csv_files)} LLM prediction files.\n")
+
+
+for file_path in csv_files:
+    model_name = os.path.basename(file_path).replace("survey_answer_", "").replace(".csv", "")
+    llm_df = pd.read_csv(file_path)
+    print(f"→ Loading {model_name}: shape {llm_df.shape}")
+
+    # Map registry ID → mutation
+    mapping = dict(zip(llm_df["ID"], llm_df["mutation"]))
+    mapping = {k: ("mtDNA" if v == 1.0 else "nDNA") for k, v in mapping.items()}
+
+    # Add predictions directly to matrix
+    matrix_df[f"LLM_{model_name}"] = matrix_df["Patient ID dataset"].map(mapping)
+    print(f"Added column LLM_{model_name}, NaNs: {matrix_df[f'LLM_{model_name}'].isna().sum()}")
+
+# --- Save updated matrix ---
+matrix_df.to_csv(output_csv, index=False)
+print(f"\n✅ Updated matrix saved to:\n{output_csv}")
+
+# --- Preview ---
+print("\nPreview of the updated matrix:")
+print(matrix_df.head())
+
+# --- Final info ---
+print(f"\nFinal matrix shape: {matrix_df.shape}")
+print(f"Final columns: {matrix_df.columns.tolist()}")

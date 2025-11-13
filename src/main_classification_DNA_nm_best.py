@@ -90,7 +90,7 @@ os.makedirs(EXPERIMENT_PATH, exist_ok=True)
 
 def setup_output(current_datetime):
     """Set up output redirection to a log file."""
-    file_name = f"classification_reports_best_pf.txt"  # ALL.txt"  # {current_datetime}_mrmr.txt"
+    file_name = f"classification_reports_best_pf_{current_datetime}.txt"  # ALL.txt"  # {current_datetime}_mrmr.txt"
     # print the results are saved in the file
     print(f"Results are saved in the file: {file_name}")
     sys.stdout = open(os.path.join(EXPERIMENT_PATH, file_name), "w")
@@ -468,17 +468,16 @@ try:
 except Exception as e:
     print("Error in feature importance:", e)
 
-    '''
 
 """
 BEST CLF 2
 """
 
 # Find the best model index using the max F1 score and max accuracy
-best_model_idx = 422  # red291  # 422#153 rid # sorted_scores_with_indices[1][0] #second
+best_model_idx = 335#422  # red291  # 422#153 rid # sorted_scores_with_indices[1][0] #second
 
 # Print the index of the best model (zero-based)
-print(f"Best model index: {best_model_idx}")
+print(f"Best RF model index: {best_model_idx}")
 
 # Retrieve the results dictionary for the best model
 best_model_results = all_configs[best_model_idx]
@@ -587,12 +586,11 @@ BEST CLF 3
 
 # Find the best model index using the max F1 score and max accuracy
 best_model_idx = (
-    97  # red107  # old comp161# Rd204  # sorted_scores_with_indices[1][0] #second
+    153#161#97  # red107  # old comp161# Rd204  # sorted_scores_with_indices[1][0] #second
 )
 
 # Print the index of the best model (zero-based)
-print(f"Best model index: {best_model_idx}")
-
+print(f"Best SVM model index: {best_model_idx}")
 # Retrieve the results dictionary for the best model
 best_model_results = all_configs[best_model_idx]
 
@@ -1046,6 +1044,6 @@ plt.close()
 
 
 
-
+'''
 # print end of the script
 print("End of the script")
