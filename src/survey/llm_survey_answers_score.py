@@ -18,7 +18,9 @@ from requests.packages.urllib3.util.retry import Retry
 
 
 # Configuration
-base_url = "http://192.168.2.5:1234"  # "http://10.7.11.166:1234"
+# base_url = "http://192.168.2.5:1234"  # "http://10.7.11.166:1234"
+base_url = "http://192.168.1.8:1234"
+
 
 # --------------------
 # Set model name
@@ -28,16 +30,16 @@ model = "phi-4-mini-reasoning"
 # model = "sauerkrautlm-gemma-2-9b-it-i1" #COMPLETE
 # model = "qwen2.5-7b-instruct" #COMPLETE
 
-max_tokens = 1000
+max_tokens = 3000
 temperature = 0.2
 
 # File paths
 file_path = "/home/saram/PhD/genomit_PMD/saved_results/survey/Description4Survey.csv"
 saving_path = (
-    f"/home/saram/PhD/genomit_PMD/saved_results/survey/survey_answer_{model}.csv"
+    f"/home/saram/PhD/genomit_PMD/saved_results/survey/survey_answer_{model}_new.csv"
 )
 params_log_path = (
-    f"/home/saram/PhD/genomit_PMD/saved_results/survey/params_log_{model}.txt"
+    f"/home/saram/PhD/genomit_PMD/saved_results/survey/params_log_{model}_new.txt"
 )
 
 # Logging
@@ -82,7 +84,7 @@ session.mount("http://", adapter)
 session.mount("https://", adapter)
 
 
-def call_api(description, model, max_tokens=2000, temperature=0.2):
+def call_api(description, model, max_tokens=3000, temperature=0.2):
     url = f"{base_url}/v1/chat/completions"
     headers = {"Content-Type": "application/json"}
     payload = {
